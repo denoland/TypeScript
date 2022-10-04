@@ -69,14 +69,18 @@ namespace ts.deno {
       return !ignoredGlobalNames.has(id);
     }
 
-    function getGlobalsForName(id: ts.__String) {
-      return isAllowedNodeGlobalName(id) ? nodeGlobals : globals;
+    function getGlobalsForName(sourceFile: SourceFile, id: ts.__String) {
+      if (!isAllowedNodeGlobalName(id))
+        return globals;
+      const isTypesNodeFile = sourceFile.fileName.includes("/@types/node/");
+      return isTypesNodeFile || nodeGlobals.has(id) ? nodeGlobals : globals;
     }
 
     function mergeGlobalSymbolTable(node: Node, source: SymbolTable, unidirectional = false) {
-      const isNodeFile = hasNodeSourceFile(node);
+      const sourceFile = getSourceFileOfNode(node);
+      const isNodeFile = hasNodeSourceFile(sourceFile);
       source.forEach((sourceSymbol, id) => {
-        const target = isNodeFile ? getGlobalsForName(id) : globals;
+        const target = isNodeFile ? getGlobalsForName(sourceFile, id) : globals;
         const targetSymbol = target.get(id);
         target.set(id, targetSymbol ? mergeSymbol(targetSymbol, sourceSymbol, unidirectional) : sourceSymbol);
       });
