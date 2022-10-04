@@ -41,6 +41,7 @@
         "binder.ts",
         "symbolWalker.ts",
         "checker.ts",
+        "deno.ts",
         "visitorPublic.ts",
         "sourcemap.ts",
         "transformers/utilities.ts",

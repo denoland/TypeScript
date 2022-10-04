@@ -225,7 +225,7 @@ namespace ts {
             }
 
             // From ambient modules
-            for (const ambientModule of program.getTypeChecker().getAmbientModules()) {
+            for (const ambientModule of program.getTypeChecker().getAmbientModules(sourceFile)) {
                 if (ambientModule.declarations && ambientModule.declarations.length > 1) {
                     addReferenceFromAmbientModule(ambientModule);
                 }
