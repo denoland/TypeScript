@@ -375,6 +375,7 @@ namespace ts {
         const nodeBuilder = createNodeBuilder();
 
         const globals = createSymbolTable();
+        const nodeGlobals = createSymbolTable();
         const undefinedSymbol = createSymbol(SymbolFlags.Property, "undefined" as __String);
         undefinedSymbol.declarations = [];
 
@@ -382,6 +383,17 @@ namespace ts {
         globalThisSymbol.exports = globals;
         globalThisSymbol.declarations = [];
         globals.set(globalThisSymbol.escapedName, globalThisSymbol);
+
+        const denoContext = ts.deno.createDenoContext({
+            globals,
+            nodeGlobals,
+            mergeSymbol,
+        });
+
+        const nodeGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
+        nodeGlobalThisSymbol.exports = denoContext.combinedGlobals;
+        nodeGlobalThisSymbol.declarations = [];
+        nodeGlobals.set(nodeGlobalThisSymbol.escapedName, nodeGlobalThisSymbol);
 
         const argumentsSymbol = createSymbol(SymbolFlags.Property, "arguments" as __String);
         const requireSymbol = createSymbol(SymbolFlags.Property, "require" as __String);
@@ -1347,7 +1359,7 @@ namespace ts {
                 // Do not report an error when merging `var globalThis` with the built-in `globalThis`,
                 // as we will already report a "Declaration name conflicts..." error, and this error
                 // won't make much sense.
-                if (target !== globalThisSymbol) {
+                if (target !== globalThisSymbol && target !== nodeGlobalThisSymbol) {
                     error(
                         source.declarations && getNameOfDeclaration(source.declarations[0]),
                         Diagnostics.Cannot_augment_module_0_with_value_exports_because_it_resolves_to_a_non_module_entity,
@@ -1441,7 +1453,7 @@ namespace ts {
             }
 
             if (isGlobalScopeAugmentation(moduleAugmentation)) {
-                mergeSymbolTable(globals, moduleAugmentation.symbol.exports!);
+                denoContext.mergeGlobalSymbolTable(moduleAugmentation, moduleAugmentation.symbol.exports!);
             }
             else {
                 // find a module that about to be augmented
@@ -2176,7 +2188,12 @@ namespace ts {
                 }
 
                 if (!excludeGlobals) {
-                    result = lookup(globals, name, meaning);
+                    if (denoContext.hasNodeSourceFile(lastLocation)) {
+                        result = lookup(nodeGlobals, name, meaning);
+                    }
+                    if (!result) {
+                        result = lookup(globals, name, meaning);
+                    }
                 }
             }
             if (!result) {
@@ -4404,6 +4421,13 @@ namespace ts {
                 }
             }
 
+            if (denoContext.hasNodeSourceFile(enclosingDeclaration)) {
+                result = callback(nodeGlobals, /*ignoreQualification*/ undefined, /*isLocalNameLookup*/ true);
+                if (result) {
+                    return result;
+                }
+            }
+
             return callback(globals, /*ignoreQualification*/ undefined, /*isLocalNameLookup*/ true);
         }
 
@@ -4498,7 +4522,11 @@ namespace ts {
                 });
 
                 // If there's no result and we're looking at the global symbol table, treat `globalThis` like an alias and try to lookup thru that
-                return result || (symbols === globals ? getCandidateListForSymbol(globalThisSymbol, globalThisSymbol, ignoreQualification) : undefined);
+                if (result) {
+                    return result;
+                }
+                const globalSymbol = symbols === nodeGlobals ? nodeGlobalThisSymbol : symbols === globals ? globalThisSymbol : undefined;
+                return globalSymbol != null ? getCandidateListForSymbol(globalSymbol, globalSymbol, ignoreQualification) : undefined;
             }
 
             function getCandidateListForSymbol(symbolFromSymbolTable: Symbol, resolvedImportedSymbol: Symbol, ignoreQualification: boolean | undefined) {
@@ -11634,7 +11662,7 @@ namespace ts {
             let indexInfos: IndexInfo[] | undefined;
             if (symbol.exports) {
                 members = getExportsOfSymbol(symbol);
-                if (symbol === globalThisSymbol) {
+                if (symbol === globalThisSymbol || symbol === nodeGlobalThisSymbol) {
                     const varsOnly = new Map<string, Symbol>() as SymbolTable;
                     members.forEach(p => {
                         if (!(p.flags & SymbolFlags.BlockScoped) && !(p.flags & SymbolFlags.ValueModule && p.declarations?.length && every(p.declarations, isAmbientModule))) {
@@ -15738,6 +15766,10 @@ namespace ts {
                     }
 
                     if (objectType.symbol === globalThisSymbol && propName !== undefined && globalThisSymbol.exports!.has(propName) && (globalThisSymbol.exports!.get(propName)!.flags & SymbolFlags.BlockScoped)) {
+                        error(accessExpression, Diagnostics.Property_0_does_not_exist_on_type_1, unescapeLeadingUnderscores(propName), typeToString(objectType));
+                    }
+                    // deno: ensure condition and body match the above
+                    else if (objectType.symbol === nodeGlobalThisSymbol && propName !== undefined && nodeGlobalThisSymbol.exports!.has(propName) && (nodeGlobalThisSymbol.exports!.get(propName)!.flags & SymbolFlags.BlockScoped)) {
                         error(accessExpression, Diagnostics.Property_0_does_not_exist_on_type_1, unescapeLeadingUnderscores(propName), typeToString(objectType));
                     }
                     else if (noImplicitAny && !compilerOptions.suppressImplicitAnyIndexErrors && !(accessFlags & AccessFlags.SuppressNoImplicitAnyError)) {
@@ -25119,7 +25151,7 @@ namespace ts {
                 if (type.flags & TypeFlags.Union
                     || type.flags & TypeFlags.Object && declaredType !== type && !(declaredType === unknownType && isEmptyAnonymousObjectType(type))
                     || isThisTypeParameter(type)
-                    || type.flags & TypeFlags.Intersection && every((type as IntersectionType).types, t => t.symbol !== globalThisSymbol)) {
+                    || type.flags & TypeFlags.Intersection && every((type as IntersectionType).types, t => t.symbol !== globalThisSymbol && t.symbol !== nodeGlobalThisSymbol)) {
                     return filterType(type, t => isTypePresencePossible(t, name, assumeTrue));
                 }
                 return type;
@@ -26379,6 +26411,9 @@ namespace ts {
                     return undefinedType;
                 }
                 else if (includeGlobalThis) {
+                    if (denoContext.hasNodeSourceFile(container)) {
+                        return getTypeOfSymbol(nodeGlobalThisSymbol);
+                    }
                     return getTypeOfSymbol(globalThisSymbol);
                 }
             }
@@ -29354,6 +29389,11 @@ namespace ts {
                         else if (noImplicitAny) {
                             error(right, Diagnostics.Element_implicitly_has_an_any_type_because_type_0_has_no_index_signature, typeToString(leftType));
                         }
+                        return anyType;
+                    }
+                    // deno: ensure condition matches above
+                    if (leftType.symbol === nodeGlobalThisSymbol) {
+                        // deno: don't bother with errors like above for simplicity
                         return anyType;
                     }
                     if (right.escapedText && !checkAndReportErrorForExtendingInterface(node)) {
@@ -41549,7 +41589,7 @@ namespace ts {
                 // find immediate value referenced by exported name (SymbolFlags.Alias is set so we don't chase down aliases)
                 const symbol = resolveName(exportedName, exportedName.escapedText, SymbolFlags.Value | SymbolFlags.Type | SymbolFlags.Namespace | SymbolFlags.Alias,
                     /*nameNotFoundMessage*/ undefined, /*nameArg*/ undefined, /*isUse*/ true);
-                if (symbol && (symbol === undefinedSymbol || symbol === globalThisSymbol || symbol.declarations && isGlobalSourceFile(getDeclarationContainer(symbol.declarations[0])))) {
+                if (symbol && (symbol === undefinedSymbol || symbol === globalThisSymbol || symbol === nodeGlobalThisSymbol || symbol.declarations && isGlobalSourceFile(getDeclarationContainer(symbol.declarations[0])))) {
                     error(exportedName, Diagnostics.Cannot_export_0_Only_local_declarations_can_be_exported_from_a_module, idText(exportedName));
                 }
                 else {
@@ -42295,6 +42335,10 @@ namespace ts {
 
                     isStaticSymbol = isStatic(location);
                     location = location.parent;
+                }
+
+                if (denoContext.hasNodeSourceFile(location)) {
+                    copySymbols(nodeGlobals, meaning);
                 }
 
                 copySymbols(globals, meaning);
@@ -43815,10 +43859,10 @@ namespace ts {
                             diagnostics.add(createDiagnosticForNode(declaration, Diagnostics.Declaration_name_conflicts_with_built_in_global_identifier_0, "globalThis"));
                         }
                     }
-                    mergeSymbolTable(globals, file.locals!);
+                    denoContext.mergeGlobalSymbolTable(file, file.locals!);
                 }
                 if (file.jsGlobalAugmentations) {
-                    mergeSymbolTable(globals, file.jsGlobalAugmentations);
+                    denoContext.mergeGlobalSymbolTable(file, file.jsGlobalAugmentations);
                 }
                 if (file.patternAmbientModules && file.patternAmbientModules.length) {
                     patternAmbientModules = concatenate(patternAmbientModules, file.patternAmbientModules);
@@ -43829,9 +43873,11 @@ namespace ts {
                 if (file.symbol && file.symbol.globalExports) {
                     // Merge in UMD exports with first-in-wins semantics (see #9771)
                     const source = file.symbol.globalExports;
+                    const isNodeFile = denoContext.hasNodeSourceFile(file);
                     source.forEach((sourceSymbol, id) => {
-                        if (!globals.has(id)) {
-                            globals.set(id, sourceSymbol);
+                        const envGlobals = isNodeFile ? denoContext.getGlobalsForName(id) : globals;
+                        if (!envGlobals.has(id)) {
+                            envGlobals.set(id, sourceSymbol);
                         }
                     });
                 }
@@ -43861,6 +43907,7 @@ namespace ts {
             getSymbolLinks(argumentsSymbol).type = getGlobalType("IArguments" as __String, /*arity*/ 0, /*reportErrors*/ true);
             getSymbolLinks(unknownSymbol).type = errorType;
             getSymbolLinks(globalThisSymbol).type = createObjectType(ObjectFlags.Anonymous, globalThisSymbol);
+            getSymbolLinks(nodeGlobalThisSymbol).type = createObjectType(ObjectFlags.Anonymous, nodeGlobalThisSymbol);
 
             // Initialize special types
             globalArrayType = getGlobalType("Array" as __String, /*arity*/ 1, /*reportErrors*/ true);
@@ -45616,6 +45663,8 @@ namespace ts {
         function getAmbientModules(): Symbol[] {
             if (!ambientModulesCache) {
                 ambientModulesCache = [];
+                // deno: don't bother including ambient modules from nodeGlobals here
+                // because we don't want them showing up in completions
                 globals.forEach((global, sym) => {
                     // No need to `unescapeLeadingUnderscores`, an escaped symbol is never an ambient module.
                     if (ambientModuleSymbolRegex.test(sym as string)) {
