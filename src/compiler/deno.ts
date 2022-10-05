@@ -122,7 +122,11 @@ namespace ts.deno {
             };
           } else if (prop === Symbol.iterator) {
             return () => {
-              return getEntries(kv => kv);
+              // Need to convert this to an array since typescript targets ES5
+              // and providing back the iterator won't work here. I don't want
+              // to change the target to ES6 because I'm not sure if that would
+              // surface any issues.
+              return Array.from(getEntries(kv => kv));
             };
           } else {
             const value = (target as any)[prop];
