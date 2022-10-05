@@ -37,10 +37,6 @@ namespace ts.deno {
     "setInterval",
     "setImmediate",
     "Global",
-    // todo: these should be defined similar to `URL` in `@types/node`
-    // so they don't conflict with the global deno declaration
-    "AbortController",
-    "AbortSignal",
   ]) as Set<ts.__String>;
 
   export function createDenoForkContext({

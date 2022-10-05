@@ -45661,12 +45661,11 @@ namespace ts {
             return false;
         }
 
-        function getAmbientModules(): Symbol[] {
+        function getAmbientModules(sourceFile?: SourceFile): Symbol[] {
             if (!ambientModulesCache) {
                 ambientModulesCache = [];
-                // deno: don't bother including ambient modules from nodeGlobals here
-                // because we don't want them showing up in completions
-                globals.forEach((global, sym) => {
+                const envGlobals = denoContext.hasNodeSourceFile(sourceFile) ? denoContext.combinedGlobals : globals;
+                envGlobals.forEach((global, sym) => {
                     // No need to `unescapeLeadingUnderscores`, an escaped symbol is never an ambient module.
                     if (ambientModuleSymbolRegex.test(sym as string)) {
                         ambientModulesCache!.push(global);
