@@ -126,7 +126,7 @@ namespace ts.deno {
               // and providing back the iterator won't work here. I don't want
               // to change the target to ES6 because I'm not sure if that would
               // surface any issues.
-              return Array.from(getEntries(kv => kv));
+              return arrayFrom(getEntries(kv => kv))[Symbol.iterator]();
             };
           } else {
             const value = (target as any)[prop];
