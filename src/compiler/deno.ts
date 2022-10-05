@@ -12,48 +12,50 @@ namespace ts.deno {
   // 1. Inspect all usages of "globals" and "globalThisSymbol" in checker.ts
   //    - Beware that `globalThisType` might refer to the global `this` type
   //      and not the global `globalThis` type
-  // 2. Inspect the "special" typescript types and add them to the list below.
-  // 3. Inspect the types in @types/node for anything that might need to go below
+  // 2. Inspect the types in @types/node for anything that might need to go below
   //    as well.
 
-  const ignoredGlobalNames = new Set([
-    // checker.ts "special" types
-    "Object",
-    "Function",
-    "CallableFunction",
-    "NewableFunction",
-    "Array",
-    "ReadonlyArray",
-    "String",
-    "Number",
-    "Boolean",
-    "RegExpr",
-    "ThisType",
-    "NonNullable",
-    // types in @types/node that we don't want to create duplicates of
-    "Int8Array",
-    "Uint8ClampedArray",
-    "Int16Array",
-    "Uint16Array",
-    "Int32Array",
-    "Float32Array",
-    "Float64Array",
-    "BigInt64Array",
-    "BigUint64Array",
-  ].map(s => s as ts.__String));
+  const nodeOnlyGlobalNames = new Set([
+    "NodeRequire",
+    "RequireResolve",
+    "RequireResolve",
+    "process",
+    "console",
+    "__filename",
+    "__dirname",
+    "require",
+    "module",
+    "exports",
+    "gc",
+    "BufferEncoding",
+    "BufferConstructor",
+    "WithImplicitCoercion",
+    "Buffer",
+    "Console",
+    "ImportMeta",
+    "setTimeout",
+    "setInterval",
+    "setImmediate",
+    "Global",
+    // todo: these should be defined similar to `URL` in `@types/node`
+    // so they don't conflict with the global deno declaration
+    "AbortController",
+    "AbortSignal",
+  ]) as Set<ts.__String>;
 
-  export function createDenoContext({
+  export function createDenoForkContext({
     mergeSymbol,
     globals,
     nodeGlobals,
+    ambientModuleSymbolRegex,
   }: {
     mergeSymbol(target: Symbol, source: Symbol, unidirectional?: boolean): Symbol;
     globals: SymbolTable;
     nodeGlobals: SymbolTable;
+    ambientModuleSymbolRegex: RegExp,
   }) {
     return {
       hasNodeSourceFile,
-      isAllowedNodeGlobalName,
       getGlobalsForName,
       mergeGlobalSymbolTable,
       combinedGlobals: createNodeGlobalsSymbolTable(),
@@ -65,22 +67,19 @@ namespace ts.deno {
       return isNodeSourceFile(sourceFile);
     }
 
-    function isAllowedNodeGlobalName(id: ts.__String) {
-      return !ignoredGlobalNames.has(id);
-    }
-
-    function getGlobalsForName(sourceFile: SourceFile, id: ts.__String) {
-      if (!isAllowedNodeGlobalName(id))
-        return globals;
-      const isTypesNodeFile = sourceFile.fileName.includes("/@types/node/");
-      return isTypesNodeFile || nodeGlobals.has(id) ? nodeGlobals : globals;
+    function getGlobalsForName(id: ts.__String) {
+      // Node ambient modules are only accessible in the node code,
+      // so put them on the node globals
+      if (ambientModuleSymbolRegex.test(id as string))
+        return nodeGlobals;
+      return nodeOnlyGlobalNames.has(id) ? nodeGlobals : globals;
     }
 
     function mergeGlobalSymbolTable(node: Node, source: SymbolTable, unidirectional = false) {
       const sourceFile = getSourceFileOfNode(node);
       const isNodeFile = hasNodeSourceFile(sourceFile);
       source.forEach((sourceSymbol, id) => {
-        const target = isNodeFile ? getGlobalsForName(sourceFile, id) : globals;
+        const target = isNodeFile ? getGlobalsForName(id) : globals;
         const targetSymbol = target.get(id);
         target.set(id, targetSymbol ? mergeSymbol(targetSymbol, sourceSymbol, unidirectional) : sourceSymbol);
       });

@@ -384,10 +384,11 @@ namespace ts {
         globalThisSymbol.declarations = [];
         globals.set(globalThisSymbol.escapedName, globalThisSymbol);
 
-        const denoContext = ts.deno.createDenoContext({
+        const denoContext = ts.deno.createDenoForkContext({
             globals,
             nodeGlobals,
             mergeSymbol,
+            ambientModuleSymbolRegex,
         });
 
         const nodeGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
@@ -43875,7 +43876,7 @@ namespace ts {
                     const source = file.symbol.globalExports;
                     const isNodeFile = denoContext.hasNodeSourceFile(file);
                     source.forEach((sourceSymbol, id) => {
-                        const envGlobals = isNodeFile ? denoContext.getGlobalsForName(file, id) : globals;
+                        const envGlobals = isNodeFile ? denoContext.getGlobalsForName(id) : globals;
                         if (!envGlobals.has(id)) {
                             envGlobals.set(id, sourceSymbol);
                         }
