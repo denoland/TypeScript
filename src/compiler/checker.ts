@@ -954,6 +954,7 @@ namespace ts {
         const reverseMappedCache = new Map<string, Type | undefined>();
         let inInferTypeForHomomorphicMappedType = false;
         let ambientModulesCache: Symbol[] | undefined;
+        let nodeAmbientModulesCache: Symbol[] | undefined;
         /**
          * List of every ambient module with a "*" wildcard.
          * Unlike other ambient modules, these can't be stored in `globals` because symbol tables only deal with exact matches.
@@ -45662,17 +45663,29 @@ namespace ts {
         }
 
         function getAmbientModules(sourceFile?: SourceFile): Symbol[] {
-            if (!ambientModulesCache) {
-                ambientModulesCache = [];
-                const envGlobals = denoContext.hasNodeSourceFile(sourceFile) ? denoContext.combinedGlobals : globals;
+            const isNode = denoContext.hasNodeSourceFile(sourceFile);
+            if (isNode) {
+                if (!nodeAmbientModulesCache) {
+                    nodeAmbientModulesCache = getAmbientModules(denoContext.combinedGlobals);
+                }
+                return nodeAmbientModulesCache;
+            } else {
+                if (!ambientModulesCache) {
+                    ambientModulesCache = getAmbientModules(globals);
+                }
+                return ambientModulesCache;
+            }
+
+            function getAmbientModules(envGlobals: SymbolTable) {
+                const cache: Symbol[] = [];
                 envGlobals.forEach((global, sym) => {
                     // No need to `unescapeLeadingUnderscores`, an escaped symbol is never an ambient module.
                     if (ambientModuleSymbolRegex.test(sym as string)) {
-                        ambientModulesCache!.push(global);
+                        cache.push(global);
                     }
                 });
+                return cache;
             }
-            return ambientModulesCache;
         }
 
         function checkGrammarImportClause(node: ImportClause): boolean {
