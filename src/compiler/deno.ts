@@ -37,6 +37,19 @@ namespace ts.deno {
     "setInterval",
     "setImmediate",
     "Global",
+    "AbortController",
+    "AbortSignal",
+    "Blob",
+    "BroadcastChannel",
+    "MessageChannel",
+    "MessagePort",
+    "Event",
+    "EventTarget",
+    "performance",
+    "TextDecoder",
+    "TextEncoder",
+    "URL",
+    "URLSearchParams",
   ]) as Set<ts.__String>;
 
   export function createDenoForkContext({
