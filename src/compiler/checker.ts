@@ -12898,7 +12898,7 @@ namespace ts {
             if (isExternalModuleNameRelative(moduleName)) {
                 return undefined;
             }
-            const symbol = getSymbol(globals, '"' + moduleName + '"' as __String, SymbolFlags.ValueModule);
+            const symbol = getSymbol(denoContext.combinedGlobals, '"' + moduleName + '"' as __String, SymbolFlags.ValueModule);
             // merged symbol is module declaration symbol combined with all augmentations
             return symbol && withAugmentations ? getMergedSymbol(symbol) : symbol;
         }
@@ -29724,7 +29724,7 @@ namespace ts {
                 // However, resolveNameHelper will continue and call this callback again, so we'll eventually get a correct suggestion.
                 if (symbol) return symbol;
                 let candidates: Symbol[];
-                if (symbols === globals) {
+                if (symbols === globals || symbols === nodeGlobals) {
                     const primitives = mapDefined(
                         ["string", "number", "boolean", "object", "bigint", "symbol"],
                         s => symbols.has((s.charAt(0).toUpperCase() + s.slice(1)) as __String)
