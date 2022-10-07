@@ -3594,6 +3594,25 @@ namespace ts {
         }
 
         function resolveExternalModule(location: Node, moduleReference: string, moduleNotFoundError: DiagnosticMessage | undefined, errorNode: Node, isForAugmentation = false): Symbol | undefined {
+            const result = resolveExternalModuleInner(location, moduleReference, moduleNotFoundError, errorNode, isForAugmentation);
+
+            // deno: attempt to resolve an npm package reference to its bare specifier w/ path ambient module
+            // when not found and the symbol has zero exports
+            if (moduleReference.startsWith("npm:") && (result == null || result?.exports?.size === 0)) {
+                const npmPackageRef = deno.tryParseNpmPackageReference(moduleReference);
+                if (npmPackageRef) {
+                    const bareSpecifier = npmPackageRef.name + (npmPackageRef.subPath == null ? "" : "/" + npmPackageRef.subPath);
+                    const ambientModule = tryFindAmbientModule(bareSpecifier, /*withAugmentations*/ true);
+                    if (ambientModule) {
+                        return ambientModule;
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        function resolveExternalModuleInner(location: Node, moduleReference: string, moduleNotFoundError: DiagnosticMessage | undefined, errorNode: Node, isForAugmentation = false): Symbol | undefined {
             if (startsWith(moduleReference, "@types/")) {
                 const diag = Diagnostics.Cannot_import_type_declaration_files_Consider_importing_0_instead_of_1;
                 const withoutAtTypePrefix = removePrefix(moduleReference, "@types/");

@@ -174,4 +174,43 @@ namespace ts.deno {
       }
     }
   }
+
+  export interface NpmPackageReference {
+    name: string;
+    versionReq: string;
+    subPath: string | undefined;
+  }
+
+  export function tryParseNpmPackageReference(text: string) {
+    try {
+      return parseNpmPackageReference(text);
+    } catch {
+      return undefined;
+    }
+  }
+
+  export function parseNpmPackageReference(text: string) {
+    if (!text.startsWith("npm:")) {
+      throw new Error(`Not an npm specifier: ${text}`);
+    }
+    text = text.replace(/^npm:/, "");
+    const parts = text.split("/");
+    const namePartLen = text.startsWith("@") ? 2 : 1;
+    if (parts.length < namePartLen) {
+      throw new Error(`Not a valid package: ${text}`);
+    }
+    const nameParts = parts.slice(0, namePartLen);
+    const lastNamePart = nameParts.at(-1)!;
+    const lastAtIndex = lastNamePart.lastIndexOf("@");
+    let versionReq: string | undefined = undefined;
+    if (lastAtIndex > 0) {
+      versionReq = lastNamePart.substring(lastAtIndex + 1);
+      nameParts[nameParts.length - 1] = lastNamePart.substring(0, lastAtIndex);
+    }
+    return {
+      name: nameParts.join("/"),
+      versionReq,
+      subPath: parts.length > nameParts.length ? parts.slice(nameParts.length).join("/") : undefined,
+    };
+  }
 }
