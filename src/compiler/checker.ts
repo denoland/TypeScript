@@ -3924,14 +3924,8 @@ namespace ts {
             if (symbol.constEnumOnlyModule) result.constEnumOnlyModule = true;
             if (symbol.members) result.members = new Map(symbol.members);
             if (symbol.exports) result.exports = new Map(symbol.exports);
-            // deno: temp change until https://github.com/microsoft/TypeScript/pull/51136/files is merged
-            if (moduleType.flags & TypeFlags.StructuredType) {
-                const resolvedModuleType = resolveStructuredTypeMembers(moduleType as StructuredType); // Should already be resolved from the signature checks above
-                result.type = createAnonymousType(result, resolvedModuleType.members, emptyArray, emptyArray, resolvedModuleType.indexInfos);
-            }
-            else {
-                result.type = moduleType;
-            }
+            const resolvedModuleType = resolveStructuredTypeMembers(moduleType as StructuredType); // Should already be resolved from the signature checks above
+            result.type = createAnonymousType(result, resolvedModuleType.members, emptyArray, emptyArray, resolvedModuleType.indexInfos);
             return result;
         }
 
