@@ -2779,7 +2779,7 @@ namespace ts {
             const usageMode = file && getUsageModeForExpression(usage);
             if (file && usageMode !== undefined) {
                 const result = isESMFormatImportImportingCommonjsFormatFile(usageMode, file.impliedNodeFormat);
-                if (usageMode === ModuleKind.ESNext || result) {
+                if (result) {
                     return result;
                 }
                 // fallthrough on cjs usages so we imply defaults for interop'd imports, too
