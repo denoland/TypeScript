@@ -193,7 +193,7 @@ namespace ts.deno {
     if (!text.startsWith("npm:")) {
       throw new Error(`Not an npm specifier: ${text}`);
     }
-    text = text.replace(/^npm:/, "");
+    text = text.replace(/^npm:\/?/, "");
     const parts = text.split("/");
     const namePartLen = text.startsWith("@") ? 2 : 1;
     if (parts.length < namePartLen) {
@@ -207,8 +207,12 @@ namespace ts.deno {
       versionReq = lastNamePart.substring(lastAtIndex + 1);
       nameParts[nameParts.length - 1] = lastNamePart.substring(0, lastAtIndex);
     }
+    const name = nameParts.join("/");
+    if (name.length === 0) {
+      throw new Error(`Npm specifier did not have a name: ${text}`);
+    }
     return {
-      name: nameParts.join("/"),
+      name,
       versionReq,
       subPath: parts.length > nameParts.length ? parts.slice(nameParts.length).join("/") : undefined,
     };
