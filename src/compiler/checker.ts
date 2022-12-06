@@ -2795,6 +2795,7 @@ namespace ts {
             const usageMode = file && getUsageModeForExpression(usage);
             if (file && usageMode !== undefined) {
                 const result = isESMFormatImportImportingCommonjsFormatFile(usageMode, file.impliedNodeFormat);
+                // deno: removed condition in typescript here (https://github.com/microsoft/TypeScript/issues/51321)
                 if (result) {
                     return result;
                 }
@@ -26602,7 +26603,7 @@ namespace ts {
             const type = tryGetThisTypeAt(node, /*includeGlobalThis*/ true, container);
             if (noImplicitThis) {
                 const globalThisType = getTypeOfSymbol(globalThisSymbol);
-                if (type === globalThisType && capturedByArrowFunction) {
+                if ((type === globalThisType || type === getTypeOfSymbol(nodeGlobalThisSymbol)) && capturedByArrowFunction) {
                     error(node, Diagnostics.The_containing_arrow_function_captures_the_global_value_of_this);
                 }
                 else if (!type) {
@@ -43880,6 +43881,8 @@ namespace ts {
         }
 
         function hasGlobalName(name: string): boolean {
+            // deno: seems ok not to bother with nodeGlobals here since
+            // this is just a public api function that we don't bother with
             return globals.has(escapeLeadingUnderscores(name));
         }
 
