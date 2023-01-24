@@ -3,9 +3,14 @@ namespace ts.deno {
   export type IsNodeSourceFileCallback = (sourceFile: SourceFile) => boolean;
 
   let isNodeSourceFile: IsNodeSourceFileCallback = () => false;
+  let nodeBuiltInModuleNames = new Set<string>();
 
   export function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback) {
     isNodeSourceFile = callback;
+  }
+
+  export function setNodeBuiltInModuleNames(names: string[]) {
+    nodeBuiltInModuleNames = new Set(names);
   }
 
   // When upgrading:
@@ -79,8 +84,16 @@ namespace ts.deno {
     function getGlobalsForName(id: ts.__String) {
       // Node ambient modules are only accessible in the node code,
       // so put them on the node globals
-      if (ambientModuleSymbolRegex.test(id as string))
+      if (ambientModuleSymbolRegex.test(id as string)) {
+        if ((id as string).startsWith('"node:')) {
+          // check if it's a node specifier that we support
+          const name = (id as string).slice(6, -1);
+          if (nodeBuiltInModuleNames.has(name)) {
+            return globals;
+          }
+        }
         return nodeGlobals;
+      }
       return nodeOnlyGlobalNames.has(id) ? nodeGlobals : globals;
     }
 
