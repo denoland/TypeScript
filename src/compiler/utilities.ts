@@ -90,6 +90,7 @@ import {
     DeclarationWithTypeParameters,
     Decorator,
     DefaultClause,
+    deno,
     DestructuringAssignment,
     Diagnostic,
     DiagnosticArguments,
@@ -11031,7 +11032,9 @@ export function createNameResolver({
     argumentsSymbol,
     error,
     getSymbolOfDeclaration,
-    globals,
+    denoGlobals,
+    nodeGlobals,
+    denoContext,
     lookup,
     setRequiresScopeChangeCache = returnUndefined,
     getRequiresScopeChangeCache = returnUndefined,
@@ -11042,7 +11045,9 @@ export function createNameResolver({
     compilerOptions: CompilerOptions;
     getSymbolOfDeclaration: (node: Declaration) => Symbol;
     error: (location: Node | undefined, message: DiagnosticMessage, ...args: DiagnosticArguments) => void;
-    globals: SymbolTable;
+    denoGlobals: SymbolTable;
+    nodeGlobals: SymbolTable;
+    denoContext: deno.DenoForkContext;
     argumentsSymbol: Symbol;
     requireSymbol: Symbol;
     lookup: (symbols: SymbolTable, name: __String, meaning: SymbolFlags) => Symbol | undefined;
@@ -11439,7 +11444,12 @@ export function createNameResolver({
             }
 
             if (!excludeGlobals) {
-                result = lookup(globals, name, meaning);
+                if (denoContext.hasNodeSourceFile(lastLocation)) {
+                    result = lookup(nodeGlobals, name, meaning);
+                }
+                if (!result) {
+                    result = lookup(denoGlobals, name, meaning);
+                }
             }
         }
         if (!result) {
