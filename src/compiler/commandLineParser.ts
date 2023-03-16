@@ -161,6 +161,8 @@ const libEntries: [string, string][] = [
     // Host only
     ["dom", "lib.dom.d.ts"],
     ["dom.iterable", "lib.dom.iterable.d.ts"],
+    ["dom.asynciterable", "lib.dom.asynciterable.d.ts"],
+    ["dom.extras", "lib.dom.extras.d.ts"],
     ["webworker", "lib.webworker.d.ts"],
     ["webworker.importscripts", "lib.webworker.importscripts.d.ts"],
     ["webworker.iterable", "lib.webworker.iterable.d.ts"],
@@ -211,7 +213,7 @@ const libEntries: [string, string][] = [
     ["es2022.string", "lib.es2022.string.d.ts"],
     ["es2022.regexp", "lib.es2022.regexp.d.ts"],
     ["es2023.array", "lib.es2023.array.d.ts"],
-    ["esnext.array", "lib.es2023.array.d.ts"],
+    ["esnext.array", "lib.esnext.array.d.ts"],
     ["esnext.symbol", "lib.es2019.symbol.d.ts"],
     ["esnext.asynciterable", "lib.es2018.asynciterable.d.ts"],
     ["esnext.intl", "lib.esnext.intl.d.ts"],

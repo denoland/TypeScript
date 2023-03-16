@@ -29,6 +29,7 @@ export * from "../moduleNameResolver";
 export * from "../binder";
 export * from "../symbolWalker";
 export * from "../checker";
+export * as deno from "../deno";
 export * from "../visitorPublic";
 export * from "../sourcemap";
 export * from "../transformers/utilities";
