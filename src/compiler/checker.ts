@@ -44268,7 +44268,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         if (node.isExportEquals) {
             // Forbid export= in esm implementation files, and esm mode declaration files
             if (moduleKind >= ModuleKind.ES2015 &&
-                ((node.flags & NodeFlags.Ambient && getSourceFileOfNode(node).impliedNodeFormat === ModuleKind.ESNext) ||
+                // deno: temporarily disable this one until Deno 2.0 (https://github.com/microsoft/TypeScript/pull/52109)
+                (/* (node.flags & NodeFlags.Ambient && getSourceFileOfNode(node).impliedNodeFormat === ModuleKind.ESNext) || */
                 (!(node.flags & NodeFlags.Ambient) && getSourceFileOfNode(node).impliedNodeFormat !== ModuleKind.CommonJS))) {
                 // export assignment is not supported in es6 modules
                 grammarErrorOnNode(node, Diagnostics.Export_assignment_cannot_be_used_when_targeting_ECMAScript_modules_Consider_using_export_default_or_another_module_format_instead);
