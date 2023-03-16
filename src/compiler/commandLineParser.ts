@@ -38,6 +38,8 @@ namespace ts {
         // Host only
         ["dom", "lib.dom.d.ts"],
         ["dom.iterable", "lib.dom.iterable.d.ts"],
+        ["dom.asynciterable", "lib.dom.asynciterable.d.ts"],
+        ["dom.extras", "lib.dom.extras.d.ts"],
         ["webworker", "lib.webworker.d.ts"],
         ["webworker.importscripts", "lib.webworker.importscripts.d.ts"],
         ["webworker.iterable", "lib.webworker.iterable.d.ts"],
@@ -86,7 +88,7 @@ namespace ts {
         ["es2022.object", "lib.es2022.object.d.ts"],
         ["es2022.sharedmemory", "lib.es2022.sharedmemory.d.ts"],
         ["es2022.string", "lib.es2022.string.d.ts"],
-        ["esnext.array", "lib.es2022.array.d.ts"],
+        ["esnext.array", "lib.esnext.array.d.ts"],
         ["esnext.symbol", "lib.es2019.symbol.d.ts"],
         ["esnext.asynciterable", "lib.es2018.asynciterable.d.ts"],
         ["esnext.intl", "lib.esnext.intl.d.ts"],
