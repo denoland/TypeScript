@@ -4,58 +4,25 @@ export type IsNodeSourceFileCallback = (sourceFile: ts.SourceFile) => boolean;
 
 let isNodeSourceFile: IsNodeSourceFileCallback = () => false;
 let nodeBuiltInModuleNames = new Set<string>();
+let nodeOnlyGlobalNames = new Set<ts.__String>();
 
 export function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback) {
   isNodeSourceFile = callback;
 }
 
-export function setNodeBuiltInModuleNames(names: string[]) {
+export function setNodeBuiltInModuleNames(names: readonly string[]) {
   nodeBuiltInModuleNames = new Set(names);
 }
 
-// When upgrading:
-// 1. Inspect all usages of "globals" and "globalThisSymbol" in checker.ts
-//    - Beware that `globalThisType` might refer to the global `this` type
-//      and not the global `globalThis` type
-// 2. Inspect the types in @types/node for anything that might need to go below
-//    as well.
+export function setNodeOnlyGlobalNames(names: readonly string[]) {
+  nodeBuiltInModuleNames = new Set(names);
+  nodeOnlyGlobalNames = new Set(names) as Set<ts.__String>;
+}
 
-const nodeOnlyGlobalNames = new Set([
-  "NodeRequire",
-  "RequireResolve",
-  "RequireResolve",
-  "process",
-  "console",
-  "__filename",
-  "__dirname",
-  "require",
-  "module",
-  "exports",
-  "gc",
-  "BufferEncoding",
-  "BufferConstructor",
-  "WithImplicitCoercion",
-  "Buffer",
-  "Console",
-  "ImportMeta",
-  "setTimeout",
-  "setInterval",
-  "setImmediate",
-  "Global",
-  "AbortController",
-  "AbortSignal",
-  "Blob",
-  "BroadcastChannel",
-  "MessageChannel",
-  "MessagePort",
-  "Event",
-  "EventTarget",
-  "performance",
-  "TextDecoder",
-  "TextEncoder",
-  "URL",
-  "URLSearchParams",
-]) as Set<ts.__String>;
+// When upgrading:
+// Inspect all usages of "globals" and "globalThisSymbol" in checker.ts
+//  - Beware that `globalThisType` might refer to the global `this` type
+//    and not the global `globalThis` type
 
 export function createDenoForkContext({
   mergeSymbol,
@@ -120,15 +87,15 @@ export function createDenoForkContext({
           };
         } else if (prop === "size") {
           let i = 0;
-          forEachEntry(() => {
+          for (const _ignore of getEntries(entry => entry)) {
             i++;
-          });
+          }
           return i;
         } else if (prop === "forEach") {
           return (action: (value: ts.Symbol, key: ts.__String) => void) => {
-            forEachEntry(([key, value]) => {
+            for (const [key, value] of getEntries(entry => entry)) {
               action(value, key);
-            });
+            }
           };
         } else if (prop === "entries") {
           return () => {
@@ -148,7 +115,7 @@ export function createDenoForkContext({
             // and providing back the iterator won't work here. I don't want
             // to change the target to ES6 because I'm not sure if that would
             // surface any issues.
-            return ts.arrayFrom(getEntries(kv => kv))[Symbol.iterator]();
+            return Array.from(getEntries(kv => kv))[Symbol.iterator]();
           };
         } else {
           const value = (target as any)[prop];
@@ -162,27 +129,17 @@ export function createDenoForkContext({
       },
     });
 
-    function forEachEntry(action: (value: [ts.__String, ts.Symbol]) => void) {
-      const iterator = getEntries((entry) => {
-        action(entry);
-      });
-      // drain the iterator to do the action
-      while (!iterator.next().done) {}
-    }
-
-    // todo(THIS PR): Can move away from this now :)
     function* getEntries<R>(
       transform: (value: [ts.__String, ts.Symbol]) => R
     ) {
       const foundKeys = new Set<ts.__String>();
+      // prefer the node globals over the deno globalThis
       for (const entries of [nodeGlobals.entries(), globals.entries()]) {
-        let next = entries.next();
-        while (!next.done) {
-          if (!foundKeys.has(next.value[0])) {
-            yield transform(next.value);
-            foundKeys.add(next.value[0]);
+        for (const entry of entries) {
+          if (!foundKeys.has(entry[0])) {
+            yield transform(entry);
+            foundKeys.add(entry[0]);
           }
-          next = entries.next();
         }
       }
     }
