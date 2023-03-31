@@ -214,6 +214,11 @@ function getEncodedRootLength(path: string): number {
         return ~path.length; // URL: "file://server", "http://server"
     }
 
+    // deno: temporary hack until https://github.com/microsoft/TypeScript/issues/53605 is fixed
+    if (path.startsWith("data:")) {
+        return ~path.length;
+    }
+
     // relative
     return 0;
 }
