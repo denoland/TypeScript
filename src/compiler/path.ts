@@ -703,6 +703,11 @@ export function ensureTrailingDirectorySeparator(path: string): string;
 /** @internal */
 export function ensureTrailingDirectorySeparator(path: string) {
     if (!hasTrailingDirectorySeparator(path)) {
+        // deno: added this so that data urls don't get a trailing slash
+        // https://github.com/microsoft/TypeScript/issues/53605#issuecomment-1492167313
+        if (path.startsWith("data:")) {
+            return path;
+        }
         return path + directorySeparator;
     }
 
