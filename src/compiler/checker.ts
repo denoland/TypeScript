@@ -130,9 +130,9 @@ import {
     deduplicate,
     DefaultClause,
     defaultMaximumTruncationLength,
-    deno,
     DeferredTypeReference,
     DeleteExpression,
+    deno,
     Diagnostic,
     DiagnosticAndArguments,
     DiagnosticArguments,
@@ -2613,7 +2613,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
 
         if (isGlobalScopeAugmentation(moduleAugmentation)) {
-            denoContext.mergeGlobalSymbolTable(moduleAugmentation, moduleAugmentation.symbol.exports!)
+            denoContext.mergeGlobalSymbolTable(moduleAugmentation, moduleAugmentation.symbol.exports!);
         }
         else {
             // find a module that about to be augmented
@@ -4869,10 +4869,10 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
         // deno: attempt to resolve an npm package reference to its bare specifier w/ path ambient module
         // when not found and the symbol has zero exports
-        if (moduleReference.startsWith("npm:") && (result == null || result?.exports?.size === 0)) {
+        if (moduleReference.startsWith("npm:") && (result === undefined || result?.exports?.size === 0)) {
             const npmPackageRef = deno.tryParseNpmPackageReference(moduleReference);
             if (npmPackageRef) {
-                const bareSpecifier = npmPackageRef.name + (npmPackageRef.subPath == null ? "" : "/" + npmPackageRef.subPath);
+                const bareSpecifier = npmPackageRef.name + (npmPackageRef.subPath === undefined ? "" : "/" + npmPackageRef.subPath);
                 const ambientModule = tryFindAmbientModule(bareSpecifier, /*withAugmentations*/ true);
                 if (ambientModule) {
                     return ambientModule;
@@ -5863,7 +5863,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 return result;
             }
             const globalSymbol = symbols === nodeGlobals ? nodeGlobalThisSymbol : symbols === globals ? globalThisSymbol : undefined;
-            return globalSymbol != null ? getCandidateListForSymbol(globalSymbol, globalSymbol, ignoreQualification) : undefined;
+            return globalSymbol !== undefined ? getCandidateListForSymbol(globalSymbol, globalSymbol, ignoreQualification) : undefined;
         }
 
         function getCandidateListForSymbol(symbolFromSymbolTable: Symbol, resolvedImportedSymbol: Symbol, ignoreQualification: boolean | undefined) {
@@ -48800,7 +48800,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 nodeAmbientModulesCache = getAmbientModules(denoContext.combinedGlobals);
             }
             return nodeAmbientModulesCache;
-        } else {
+        }
+        else {
             if (!ambientModulesCache) {
                 ambientModulesCache = getAmbientModules(globals);
             }
@@ -48808,14 +48809,14 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
 
         function getAmbientModules(envGlobals: SymbolTable) {
-            const cache: Symbol[] = [];
+            const result: Symbol[] = [];
             envGlobals.forEach((global, sym) => {
                 // No need to `unescapeLeadingUnderscores`, an escaped symbol is never an ambient module.
                 if (ambientModuleSymbolRegex.test(sym as string)) {
-                    cache!.push(global);
+                    result.push(global);
                 }
             });
-            return cache;
+            return result;
         }
     }
 

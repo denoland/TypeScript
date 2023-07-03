@@ -81,35 +81,42 @@ export function createDenoForkContext({
           return (key: ts.__String) => {
             return nodeGlobals.get(key) ?? globals.get(key);
           };
-        } else if (prop === "has") {
+        }
+        else if (prop === "has") {
           return (key: ts.__String) => {
             return nodeGlobals.has(key) || globals.has(key);
           };
-        } else if (prop === "size") {
+        }
+        else if (prop === "size") {
           let i = 0;
           for (const _ignore of getEntries(entry => entry)) {
             i++;
           }
           return i;
-        } else if (prop === "forEach") {
+        }
+        else if (prop === "forEach") {
           return (action: (value: ts.Symbol, key: ts.__String) => void) => {
             for (const [key, value] of getEntries(entry => entry)) {
               action(value, key);
             }
           };
-        } else if (prop === "entries") {
+        }
+        else if (prop === "entries") {
           return () => {
             return getEntries(kv => kv);
           };
-        } else if (prop === "keys") {
+        }
+        else if (prop === "keys") {
           return () => {
             return getEntries(kv => kv[0]);
           };
-        } else if (prop === "values") {
+        }
+        else if (prop === "values") {
           return () => {
             return getEntries(kv => kv[1]);
           };
-        } else if (prop === Symbol.iterator) {
+        }
+        else if (prop === Symbol.iterator) {
           return () => {
             // Need to convert this to an array since typescript targets ES5
             // and providing back the iterator won't work here. I don't want
@@ -117,7 +124,8 @@ export function createDenoForkContext({
             // surface any issues.
             return Array.from(getEntries(kv => kv))[Symbol.iterator]();
           };
-        } else {
+        }
+        else {
           const value = (target as any)[prop];
           if (value instanceof Function) {
             return function (this: any, ...args: any[]) {
@@ -155,7 +163,8 @@ export interface NpmPackageReference {
 export function tryParseNpmPackageReference(text: string) {
   try {
     return parseNpmPackageReference(text);
-  } catch {
+  }
+  catch {
     return undefined;
   }
 }
@@ -173,7 +182,7 @@ export function parseNpmPackageReference(text: string) {
   const nameParts = parts.slice(0, namePartLen);
   const lastNamePart = nameParts.at(-1)!;
   const lastAtIndex = lastNamePart.lastIndexOf("@");
-  let versionReq: string | undefined = undefined;
+  let versionReq: string | undefined;
   if (lastAtIndex > 0) {
     versionReq = lastNamePart.substring(lastAtIndex + 1);
     nameParts[nameParts.length - 1] = lastNamePart.substring(0, lastAtIndex);
