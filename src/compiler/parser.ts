@@ -8284,7 +8284,8 @@ namespace Parser {
         const moduleSpecifier = parseModuleSpecifier();
 
         let assertClause: AssertClause | undefined;
-        if (token() === SyntaxKind.AssertKeyword && !scanner.hasPrecedingLineBreak()) {
+        const hasAssertKeyword = token() === SyntaxKind.AssertKeyword || token() === SyntaxKind.WithKeyword;
+        if (hasAssertKeyword && !scanner.hasPrecedingLineBreak()) {
             assertClause = parseAssertClause();
         }
 
@@ -8304,7 +8305,11 @@ namespace Parser {
     function parseAssertClause(skipAssertKeyword?: true) {
         const pos = getNodePos();
         if (!skipAssertKeyword) {
-            parseExpected(SyntaxKind.AssertKeyword);
+            if (token() === SyntaxKind.WithKeyword) {
+                parseExpected(SyntaxKind.WithKeyword);
+            } else {
+                parseExpected(SyntaxKind.AssertKeyword);
+            }
         }
         const openBracePosition = scanner.getTokenStart();
         if (parseExpected(SyntaxKind.OpenBraceToken)) {
