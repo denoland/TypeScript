@@ -249,7 +249,7 @@ declare namespace Intl {
     }
 
     interface DateTimeFormatOptions {
-        calendar?: string | undefined;
+        calendar?: string | (typeof globalThis extends { Temporal: { CalendarProtocol: infer T; }; } ? T : undefined) | undefined;
         dayPeriod?: "narrow" | "short" | "long" | undefined;
         numberingSystem?: string | undefined;
 
