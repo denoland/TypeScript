@@ -1477,18 +1477,18 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     var emitResolver = createResolver();
     var nodeBuilder = createNodeBuilder();
 
-    var globals = createSymbolTable();
+    var denoGlobals = createSymbolTable();
     var nodeGlobals = createSymbolTable();
     var undefinedSymbol = createSymbol(SymbolFlags.Property, "undefined" as __String);
     undefinedSymbol.declarations = [];
 
-    var globalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
-    globalThisSymbol.exports = globals;
-    globalThisSymbol.declarations = [];
-    globals.set(globalThisSymbol.escapedName, globalThisSymbol);
+    var denoGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
+    denoGlobalThisSymbol.exports = denoGlobals;
+    denoGlobalThisSymbol.declarations = [];
+    denoGlobals.set(denoGlobalThisSymbol.escapedName, denoGlobalThisSymbol);
 
     const denoContext = deno.createDenoForkContext({
-        globals,
+        globals: denoGlobals,
         nodeGlobals,
         mergeSymbol,
         ambientModuleSymbolRegex,
@@ -2603,7 +2603,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             // Do not report an error when merging `var globalThis` with the built-in `globalThis`,
             // as we will already report a "Declaration name conflicts..." error, and this error
             // won't make much sense.
-            if (target !== globalThisSymbol && target !== nodeGlobalThisSymbol) {
+            if (target !== denoGlobalThisSymbol && target !== nodeGlobalThisSymbol) {
                 error(
                     source.declarations && getNameOfDeclaration(source.declarations[0]),
                     Diagnostics.Cannot_augment_module_0_with_value_exports_because_it_resolves_to_a_non_module_entity,
@@ -3474,7 +3474,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     result = lookup(nodeGlobals, name, meaning);
                 }
                 if (!result) {
-                    result = lookup(globals, name, meaning);
+                    result = lookup(denoGlobals, name, meaning);
                 }
             }
         }
@@ -3632,7 +3632,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 // Look at 'compilerOptions.isolatedModules' and not 'getIsolatedModules(...)' (which considers 'verbatimModuleSyntax')
                 // here because 'verbatimModuleSyntax' will already have an error for importing a type without 'import type'.
                 if (compilerOptions.isolatedModules && result && isInExternalModule && (meaning & SymbolFlags.Value) === SymbolFlags.Value) {
-                    const denoOrNodeGlobals = denoContext.hasNodeSourceFile(lastLocation) ? nodeGlobals : globals;
+                    const denoOrNodeGlobals = denoContext.hasNodeSourceFile(lastLocation) ? nodeGlobals : denoGlobals;
                     const isGlobal = lookup(denoOrNodeGlobals, name, meaning) === result;
                     const nonValueSymbol = isGlobal && isSourceFile(lastLocation!) && lastLocation.locals && lookup(lastLocation.locals, name, ~SymbolFlags.Value);
                     if (nonValueSymbol) {
@@ -5977,7 +5977,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             }
         }
 
-        return callback(globals, /*ignoreQualification*/ undefined, /*isLocalNameLookup*/ true);
+        return callback(denoGlobals, /*ignoreQualification*/ undefined, /*isLocalNameLookup*/ true);
     }
 
     function getQualifiedLeftMeaning(rightMeaning: SymbolFlags) {
@@ -6074,7 +6074,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             if (result) {
                 return result;
             }
-            const globalSymbol = symbols === nodeGlobals ? nodeGlobalThisSymbol : symbols === globals ? globalThisSymbol : undefined;
+            const globalSymbol = symbols === nodeGlobals ? nodeGlobalThisSymbol : symbols === denoGlobals ? denoGlobalThisSymbol : undefined;
             return globalSymbol !== undefined ? getCandidateListForSymbol(globalSymbol, globalSymbol, ignoreQualification) : undefined;
         }
 
@@ -13727,7 +13727,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         // Combinations of function, class, enum and module
         let members = getExportsOfSymbol(symbol);
         let indexInfos: IndexInfo[] | undefined;
-        if (symbol === globalThisSymbol || symbol === nodeGlobalThisSymbol) {
+        if (symbol === denoGlobalThisSymbol || symbol === nodeGlobalThisSymbol) {
             const varsOnly = new Map<__String, Symbol>();
             members.forEach(p => {
                 if (!(p.flags & SymbolFlags.BlockScoped) && !(p.flags & SymbolFlags.ValueModule && p.declarations?.length && every(p.declarations, isAmbientModule))) {
@@ -18312,7 +18312,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     }
                 }
 
-                if (objectType.symbol === globalThisSymbol && propName !== undefined && globalThisSymbol.exports!.has(propName) && (globalThisSymbol.exports!.get(propName)!.flags & SymbolFlags.BlockScoped)) {
+                if (objectType.symbol === denoGlobalThisSymbol && propName !== undefined && denoGlobalThisSymbol.exports!.has(propName) && (denoGlobalThisSymbol.exports!.get(propName)!.flags & SymbolFlags.BlockScoped)) {
                     error(accessExpression, Diagnostics.Property_0_does_not_exist_on_type_1, unescapeLeadingUnderscores(propName), typeToString(objectType));
                 }
                 // deno: ensure condition and body match the above
@@ -29734,7 +29734,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
         const type = tryGetThisTypeAt(node, /*includeGlobalThis*/ true, container);
         if (noImplicitThis) {
-            const globalThisType = getTypeOfSymbol(globalThisSymbol);
+            const globalThisType = getTypeOfSymbol(denoGlobalThisSymbol);
             if ((type === globalThisType || type === getTypeOfSymbol(nodeGlobalThisSymbol)) && capturedByArrowFunction) {
                 error(node, Diagnostics.The_containing_arrow_function_captures_the_global_value_of_this);
             }
@@ -29800,7 +29800,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 if (denoContext.hasNodeSourceFile(container)) {
                     return getTypeOfSymbol(nodeGlobalThisSymbol);
                 }
-                return getTypeOfSymbol(globalThisSymbol);
+                return getTypeOfSymbol(denoGlobalThisSymbol);
             }
         }
     }
@@ -33076,8 +33076,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 if (!isUncheckedJS && isJSLiteralType(leftType)) {
                     return anyType;
                 }
-                if (leftType.symbol === globalThisSymbol) {
-                    if (globalThisSymbol.exports!.has(right.escapedText) && (globalThisSymbol.exports!.get(right.escapedText)!.flags & SymbolFlags.BlockScoped)) {
+                if (leftType.symbol === denoGlobalThisSymbol) {
+                    if (denoGlobalThisSymbol.exports!.has(right.escapedText) && (denoGlobalThisSymbol.exports!.get(right.escapedText)!.flags & SymbolFlags.BlockScoped)) {
                         error(right, Diagnostics.Property_0_does_not_exist_on_type_1, unescapeLeadingUnderscores(right.escapedText), typeToString(leftType));
                     }
                     else if (noImplicitAny) {
@@ -33422,7 +33422,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             // However, resolveNameHelper will continue and call this callback again, so we'll eventually get a correct suggestion.
             if (symbol) return symbol;
             let candidates: Symbol[];
-            if (symbols === globals || symbols === nodeGlobals) {
+            if (symbols === denoGlobals || symbols === nodeGlobals) {
                 const primitives = mapDefined(
                     ["string", "number", "boolean", "object", "bigint", "symbol"],
                     s => symbols.has((s.charAt(0).toUpperCase() + s.slice(1)) as __String)
@@ -46374,7 +46374,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             const exportedName = node.propertyName || node.name;
             // find immediate value referenced by exported name (SymbolFlags.Alias is set so we don't chase down aliases)
             const symbol = resolveName(exportedName, exportedName.escapedText, SymbolFlags.Value | SymbolFlags.Type | SymbolFlags.Namespace | SymbolFlags.Alias, /*nameNotFoundMessage*/ undefined, /*nameArg*/ undefined, /*isUse*/ true);
-            if (symbol && (symbol === undefinedSymbol || symbol === globalThisSymbol || symbol === nodeGlobalThisSymbol || symbol.declarations && isGlobalSourceFile(getDeclarationContainer(symbol.declarations[0])))) {
+            if (symbol && (symbol === undefinedSymbol || symbol === denoGlobalThisSymbol || symbol === nodeGlobalThisSymbol || symbol.declarations && isGlobalSourceFile(getDeclarationContainer(symbol.declarations[0])))) {
                 error(exportedName, Diagnostics.Cannot_export_0_Only_local_declarations_can_be_exported_from_a_module, idText(exportedName));
             }
             else {
@@ -47248,7 +47248,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 copySymbols(nodeGlobals, meaning);
             }
 
-            copySymbols(globals, meaning);
+            copySymbols(denoGlobals, meaning);
         }
 
         /**
@@ -48494,7 +48494,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         // deno: seems ok not to bother with nodeGlobals here since
         // this is just a public api function that we don't bother with
         // NOTICE: Make sure to check that's still the case when upgrading!!
-        return globals.has(escapeLeadingUnderscores(name));
+        return denoGlobals.has(escapeLeadingUnderscores(name));
     }
 
     function getReferencedValueSymbol(reference: Identifier, startInDeclarationContainer?: boolean): Symbol | undefined {
@@ -48931,7 +48931,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 const source = file.symbol.globalExports;
                 const isNodeFile = denoContext.hasNodeSourceFile(file);
                 source.forEach((sourceSymbol, id) => {
-                    const envGlobals = isNodeFile ? denoContext.getGlobalsForName(id) : globals;
+                    const envGlobals = isNodeFile ? denoContext.getGlobalsForName(id) : denoGlobals;
                     if (!envGlobals.has(id)) {
                         envGlobals.set(id, sourceSymbol);
                     }
@@ -48957,12 +48957,12 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
 
         // Setup global builtins
-        addToSymbolTable(globals, builtinGlobals, Diagnostics.Declaration_name_conflicts_with_built_in_global_identifier_0);
+        addToSymbolTable(denoGlobals, builtinGlobals, Diagnostics.Declaration_name_conflicts_with_built_in_global_identifier_0);
 
         getSymbolLinks(undefinedSymbol).type = undefinedWideningType;
         getSymbolLinks(argumentsSymbol).type = getGlobalType("IArguments" as __String, /*arity*/ 0, /*reportErrors*/ true);
         getSymbolLinks(unknownSymbol).type = errorType;
-        getSymbolLinks(globalThisSymbol).type = createObjectType(ObjectFlags.Anonymous, globalThisSymbol);
+        getSymbolLinks(denoGlobalThisSymbol).type = createObjectType(ObjectFlags.Anonymous, denoGlobalThisSymbol);
         getSymbolLinks(nodeGlobalThisSymbol).type = createObjectType(ObjectFlags.Anonymous, nodeGlobalThisSymbol);
 
         // Initialize special types
@@ -50895,7 +50895,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
         else {
             if (!ambientModulesCache) {
-                ambientModulesCache = getAmbientModules(globals);
+                ambientModulesCache = getAmbientModules(denoGlobals);
             }
             return ambientModulesCache;
         }
