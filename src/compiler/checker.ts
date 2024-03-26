@@ -3632,7 +3632,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 // Look at 'compilerOptions.isolatedModules' and not 'getIsolatedModules(...)' (which considers 'verbatimModuleSyntax')
                 // here because 'verbatimModuleSyntax' will already have an error for importing a type without 'import type'.
                 if (compilerOptions.isolatedModules && result && isInExternalModule && (meaning & SymbolFlags.Value) === SymbolFlags.Value) {
-                    const isGlobal = lookup(globals, name, meaning) === result;
+                    const denoOrNodeGlobals = denoContext.hasNodeSourceFile(lastLocation) ? nodeGlobals : globals;
+                    const isGlobal = lookup(denoOrNodeGlobals, name, meaning) === result;
                     const nonValueSymbol = isGlobal && isSourceFile(lastLocation!) && lastLocation.locals && lookup(lastLocation.locals, name, ~SymbolFlags.Value);
                     if (nonValueSymbol) {
                         const importDecl = nonValueSymbol.declarations?.find(d => d.kind === SyntaxKind.ImportSpecifier || d.kind === SyntaxKind.ImportClause || d.kind === SyntaxKind.NamespaceImport || d.kind === SyntaxKind.ImportEqualsDeclaration);
