@@ -4099,7 +4099,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
     function canHaveSyntheticDefault(file: SourceFile | undefined, moduleSymbol: Symbol, dontResolveAlias: boolean, usage: Expression) {
         const usageMode = file && getUsageModeForExpression(usage);
-        if (file && usageMode !== undefined && ModuleKind.Node16 <= moduleKind && moduleKind <= ModuleKind.NodeNext) {
+        // deno: change the condition here to not be dependent on the global module resolution setting, but just the impliedNodeFormat
+        if (file && usageMode !== undefined && file.impliedNodeFormat === ModuleKind.CommonJS) {
             const result = isESMFormatImportImportingCommonjsFormatFile(usageMode, file.impliedNodeFormat);
             // deno: removed condition in typescript here (https://github.com/microsoft/TypeScript/issues/51321)
             if (result) {
