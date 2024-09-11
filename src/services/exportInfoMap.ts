@@ -68,7 +68,6 @@ export const enum ImportKind {
     CommonJS,
 }
 
-/** @internal */
 export const enum ExportKind {
     Named,
     Default,
@@ -77,7 +76,6 @@ export const enum ExportKind {
     Module,
 }
 
-/** @internal */
 export interface SymbolExportInfo {
     readonly symbol: Symbol;
     readonly moduleSymbol: Symbol;
@@ -114,7 +112,6 @@ interface CachedSymbolExportInfo {
     isFromPackageJson: boolean;
 }
 
-/** @internal */
 export interface ExportInfoMap {
     isUsableByFile(importingFile: Path): boolean;
     clear(): void;
@@ -127,7 +124,6 @@ export interface ExportInfoMap {
     onFileChanged(oldSourceFile: SourceFile, newSourceFile: SourceFile, typeAcquisitionEnabled: boolean): boolean;
 }
 
-/** @internal */
 export interface CacheableExportInfoMapHost {
     getCurrentProgram(): Program | undefined;
     getPackageJsonAutoImportProvider(): Program | undefined;
@@ -135,7 +131,6 @@ export interface CacheableExportInfoMapHost {
 }
 
 export type ExportMapInfoKey = string & { __exportInfoKey: void; };
-/** @internal */
 export function createCacheableExportInfoMap(host: CacheableExportInfoMapHost): ExportInfoMap {
     let exportInfoId = 1;
     const exportInfo = createMultiMap<ExportMapInfoKey, CachedSymbolExportInfo>();
