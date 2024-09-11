@@ -91,6 +91,7 @@ import {
     DeclarationWithTypeParameters,
     Decorator,
     DefaultClause,
+    deno,
     DestructuringAssignment,
     Diagnostic,
     DiagnosticArguments,
@@ -11368,7 +11369,9 @@ export function createNameResolver({
     argumentsSymbol,
     error,
     getSymbolOfDeclaration,
-    globals,
+    denoGlobals,
+    nodeGlobals,
+    denoContext,
     lookup,
     setRequiresScopeChangeCache = returnUndefined,
     getRequiresScopeChangeCache = returnUndefined,
@@ -11751,7 +11754,12 @@ export function createNameResolver({
             }
 
             if (!excludeGlobals) {
-                result = lookup(globals, name, meaning);
+                if (denoContext.hasNodeSourceFile(lastLocation)) {
+                    result = lookup(nodeGlobals, name, meaning);
+                }
+                if (!result) {
+                    result = lookup(denoGlobals, name, meaning);
+                }
             }
         }
         if (!result) {
