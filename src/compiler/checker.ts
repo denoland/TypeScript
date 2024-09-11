@@ -2400,7 +2400,9 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
         if (!isIdentifier(node.expression.expression)) return false;
         // Exactly `globalThis.Symbol.something` and `globalThis` resolves to the global `globalThis`
-        return idText(node.expression.name) === "Symbol" && idText(node.expression.expression) === "globalThis" && getResolvedSymbol(node.expression.expression) === globalThisSymbol;
+        if (idText(node.expression.name) !== "Symbol" || idText(node.expression.expression) !== "globalThis") return false;
+        const resolvedSymbol = getResolvedSymbol(node.expression.expression);
+        return resolvedSymbol === denoGlobalThisSymbol || resolvedSymbol === nodeGlobalThisSymbol;
     }
 
     function getCachedType(key: string | undefined) {
