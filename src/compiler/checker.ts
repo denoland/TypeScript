@@ -143,6 +143,7 @@ import {
     defaultMaximumTruncationLength,
     DeferredTypeReference,
     DeleteExpression,
+    deno,
     Diagnostic,
     DiagnosticAndArguments,
     DiagnosticArguments,
@@ -1534,14 +1535,52 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         evaluateEntityNameExpression,
     });
 
-    var globals = createSymbolTable();
+    var denoGlobals = createSymbolTable();
+    var nodeGlobals = createSymbolTable();
     var undefinedSymbol = createSymbol(SymbolFlags.Property, "undefined" as __String);
     undefinedSymbol.declarations = [];
 
-    var globalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
-    globalThisSymbol.exports = globals;
-    globalThisSymbol.declarations = [];
-    globals.set(globalThisSymbol.escapedName, globalThisSymbol);
+    var denoGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
+    denoGlobalThisSymbol.exports = denoGlobals;
+    denoGlobalThisSymbol.declarations = [];
+    denoGlobals.set(denoGlobalThisSymbol.escapedName, denoGlobalThisSymbol);
+
+    const denoContext = deno.createDenoForkContext({
+        globals: denoGlobals,
+        nodeGlobals,
+        mergeSymbol,
+    });
+
+    const nodeGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
+    nodeGlobalThisSymbol.exports = denoContext.combinedGlobals;
+    nodeGlobalThisSymbol.declarations = [];
+    nodeGlobals.set(nodeGlobalThisSymbol.escapedName, nodeGlobalThisSymbol);
+
+    // deno: huge hacks to get @types/node to work
+    nodeGlobals.set(
+        "onmessage" as __String,
+        createSymbol(SymbolFlags.Module, "onmessage" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "onabort" as __String,
+        createSymbol(SymbolFlags.Module, "onabort" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "ReportingObserver" as __String,
+        createSymbol(SymbolFlags.Module, "ReportingObserver" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "PerformanceObserver" as __String,
+        createSymbol(SymbolFlags.Module, "PerformanceObserver" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "PerformanceObserverEntryList" as __String,
+        createSymbol(SymbolFlags.Module, "PerformanceObserverEntryList" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "PerformanceResourceTiming" as __String,
+        createSymbol(SymbolFlags.Module, "PerformanceResourceTiming" as __String, CheckFlags.Readonly),
+    );
 
     var argumentsSymbol = createSymbol(SymbolFlags.Property, "arguments" as __String);
     var requireSymbol = createSymbol(SymbolFlags.Property, "require" as __String);
@@ -1559,7 +1598,9 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         compilerOptions,
         requireSymbol,
         argumentsSymbol,
-        globals,
+        denoGlobals,
+        nodeGlobals,
+        denoContext,
         getSymbolOfDeclaration,
         error,
         getRequiresScopeChangeCache,
@@ -1574,7 +1615,9 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         compilerOptions,
         requireSymbol,
         argumentsSymbol,
-        globals,
+        denoGlobals,
+        nodeGlobals,
+        denoContext,
         getSymbolOfDeclaration,
         error,
         getRequiresScopeChangeCache,
@@ -2214,6 +2257,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     var reverseMappedCache = new Map<string, Type | undefined>();
     var reverseHomomorphicMappedCache = new Map<string, Type | undefined>();
     var ambientModulesCache: Symbol[] | undefined;
+    var nodeAmbientModulesCache: Symbol[] | undefined;
     /**
      * List of every ambient module with a "*" wildcard.
      * Unlike other ambient modules, these can't be stored in `globals` because symbol tables only deal with exact matches.
@@ -2385,7 +2429,9 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
         if (!isIdentifier(node.expression.expression)) return false;
         // Exactly `globalThis.Symbol.something` and `globalThis` resolves to the global `globalThis`
-        return idText(node.expression.name) === "Symbol" && idText(node.expression.expression) === "globalThis" && getResolvedSymbol(node.expression.expression) === globalThisSymbol;
+        if (idText(node.expression.name) !== "Symbol" || idText(node.expression.expression) !== "globalThis") return false;
+        const resolvedSymbol = getResolvedSymbol(node.expression.expression);
+        return resolvedSymbol === denoGlobalThisSymbol || resolvedSymbol === nodeGlobalThisSymbol;
     }
 
     function getCachedType(key: string | undefined) {
@@ -2697,7 +2743,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             // Do not report an error when merging `var globalThis` with the built-in `globalThis`,
             // as we will already report a "Declaration name conflicts..." error, and this error
             // won't make much sense.
-            if (target !== globalThisSymbol) {
+            if (target !== denoGlobalThisSymbol && target !== nodeGlobalThisSymbol) {
                 error(
                     source.declarations && getNameOfDeclaration(source.declarations[0]),
                     Diagnostics.Cannot_augment_module_0_with_value_exports_because_it_resolves_to_a_non_module_entity,
@@ -2813,7 +2859,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
 
         if (isGlobalScopeAugmentation(moduleAugmentation)) {
-            mergeSymbolTable(globals, moduleAugmentation.symbol.exports!);
+            denoContext.mergeGlobalSymbolTable(moduleAugmentation, moduleAugmentation.symbol.exports!);
         }
         else {
             // find a module that about to be augmented
@@ -2863,17 +2909,19 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
     function addUndefinedToGlobalsOrErrorOnRedeclaration() {
         const name = undefinedSymbol.escapedName;
-        const targetSymbol = globals.get(name);
-        if (targetSymbol) {
-            forEach(targetSymbol.declarations, declaration => {
-                // checkTypeNameIsReserved will have added better diagnostics for type declarations.
-                if (!isTypeDeclaration(declaration)) {
-                    diagnostics.add(createDiagnosticForNode(declaration, Diagnostics.Declaration_name_conflicts_with_built_in_global_identifier_0, unescapeLeadingUnderscores(name)));
-                }
-            });
-        }
-        else {
-            globals.set(name, undefinedSymbol);
+        for (const globals of [nodeGlobals, denoGlobals]) {
+            const targetSymbol = globals.get(name);
+            if (targetSymbol) {
+                forEach(targetSymbol.declarations, declaration => {
+                    // checkTypeNameIsReserved will have added better diagnostics for type declarations.
+                    if (!isTypeDeclaration(declaration)) {
+                        diagnostics.add(createDiagnosticForNode(declaration, Diagnostics.Declaration_name_conflicts_with_built_in_global_identifier_0, unescapeLeadingUnderscores(name)));
+                    }
+                });
+            }
+            else {
+                globals.set(name, undefinedSymbol);
+            }
         }
     }
 
@@ -3300,7 +3348,9 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             // Look at 'compilerOptions.isolatedModules' and not 'getIsolatedModules(...)' (which considers 'verbatimModuleSyntax')
             // here because 'verbatimModuleSyntax' will already have an error for importing a type without 'import type'.
             if (compilerOptions.isolatedModules && result && isInExternalModule && (meaning & SymbolFlags.Value) === SymbolFlags.Value) {
-                const isGlobal = getSymbol(globals, name, meaning) === result;
+                const isNodeFile = denoContext.hasNodeSourceFile(lastLocation);
+                const fileGlobals = isNodeFile ? nodeGlobals : denoGlobals;
+                const isGlobal = getSymbol(fileGlobals, name, meaning) === result;
                 const nonValueSymbol = isGlobal && isSourceFile(lastLocation) && lastLocation.locals && getSymbol(lastLocation.locals, name, ~SymbolFlags.Value);
                 if (nonValueSymbol) {
                     const importDecl = nonValueSymbol.declarations?.find(d => d.kind === SyntaxKind.ImportSpecifier || d.kind === SyntaxKind.ImportClause || d.kind === SyntaxKind.NamespaceImport || d.kind === SyntaxKind.ImportEqualsDeclaration);
@@ -3723,11 +3773,12 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 // In Node.js, CommonJS modules always have a synthetic default when imported into ESM
                 return true;
             }
-            if (usageMode === ModuleKind.ESNext && targetMode === ModuleKind.ESNext) {
-                // No matter what the `module` setting is, if we're confident that both files
-                // are ESM, there cannot be a synthetic default.
-                return false;
-            }
+            // deno: commented out for https://github.com/microsoft/TypeScript/issues/51321
+            // if (usageMode === ModuleKind.ESNext && targetMode === ModuleKind.ESNext) {
+            //     // No matter what the `module` setting is, if we're confident that both files
+            //     // are ESM, there cannot be a synthetic default.
+            //     return false;
+            // }
         }
         if (!allowSyntheticDefaultImports) {
             return false;
@@ -4612,6 +4663,25 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     }
 
     function resolveExternalModule(location: Node, moduleReference: string, moduleNotFoundError: DiagnosticMessage | undefined, errorNode: Node | undefined, isForAugmentation = false): Symbol | undefined {
+        const result = resolveExternalModuleInner(location, moduleReference, moduleNotFoundError, errorNode, isForAugmentation);
+
+        // deno: attempt to resolve an npm package reference to its bare specifier w/ path ambient module
+        // when not found and the symbol has zero exports
+        if (moduleReference.startsWith("npm:") && (result === undefined || result?.exports?.size === 0)) {
+            const npmPackageRef = deno.tryParseNpmPackageReference(moduleReference);
+            if (npmPackageRef) {
+                const bareSpecifier = npmPackageRef.name + (npmPackageRef.subPath === undefined ? "" : "/" + npmPackageRef.subPath);
+                const ambientModule = tryFindAmbientModule(bareSpecifier, /*withAugmentations*/ true);
+                if (ambientModule) {
+                    return ambientModule;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    function resolveExternalModuleInner(location: Node, moduleReference: string, moduleNotFoundError: DiagnosticMessage | undefined, errorNode: Node | undefined, isForAugmentation = false): Symbol | undefined {
         if (errorNode && startsWith(moduleReference, "@types/")) {
             const diag = Diagnostics.Cannot_import_type_declaration_files_Consider_importing_0_instead_of_1;
             const withoutAtTypePrefix = removePrefix(moduleReference, "@types/");
@@ -5550,7 +5620,14 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             }
         }
 
-        return callback(globals, /*ignoreQualification*/ undefined, /*isLocalNameLookup*/ true);
+        if (denoContext.hasNodeSourceFile(enclosingDeclaration)) {
+            result = callback(nodeGlobals, /*ignoreQualification*/ undefined, /*isLocalNameLookup*/ true);
+            if (result) {
+                return result;
+            }
+        }
+
+        return callback(denoGlobals, /*ignoreQualification*/ undefined, /*isLocalNameLookup*/ true);
     }
 
     function getQualifiedLeftMeaning(rightMeaning: SymbolFlags) {
@@ -5644,7 +5721,11 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             });
 
             // If there's no result and we're looking at the global symbol table, treat `globalThis` like an alias and try to lookup thru that
-            return result || (symbols === globals ? getCandidateListForSymbol(globalThisSymbol, globalThisSymbol, ignoreQualification) : undefined);
+            if (result) {
+                return result;
+            }
+            const globalSymbol = symbols === nodeGlobals ? nodeGlobalThisSymbol : symbols === denoGlobals ? denoGlobalThisSymbol : undefined;
+            return globalSymbol !== undefined ? getCandidateListForSymbol(globalSymbol, globalSymbol, ignoreQualification) : undefined;
         }
 
         function getCandidateListForSymbol(symbolFromSymbolTable: Symbol, resolvedImportedSymbol: Symbol, ignoreQualification: boolean | undefined) {
@@ -8201,14 +8282,15 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     // An `import` type directed at an esm format file is only going to resolve in esm mode - set the esm mode assertion
                     if (targetFile?.impliedNodeFormat === ModuleKind.ESNext && targetFile.impliedNodeFormat !== contextFile?.impliedNodeFormat) {
                         specifier = getSpecifierForModuleSymbol(chain[0], context, ModuleKind.ESNext);
-                        attributes = factory.createImportAttributes(
-                            factory.createNodeArray([
-                                factory.createImportAttribute(
-                                    factory.createStringLiteral("resolution-mode"),
-                                    factory.createStringLiteral("import"),
-                                ),
-                            ]),
-                        );
+                        // deno: ignored because it's too noisy and unnecessary
+                        // attributes = factory.createImportAttributes(
+                        //     factory.createNodeArray([
+                        //         factory.createImportAttribute(
+                        //             factory.createStringLiteral("resolution-mode"),
+                        //             factory.createStringLiteral("import"),
+                        //         ),
+                        //     ]),
+                        // );
                     }
                 }
                 if (!specifier) {
@@ -13898,7 +13980,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         // Combinations of function, class, enum and module
         let members = getExportsOfSymbol(symbol);
         let indexInfos: IndexInfo[] | undefined;
-        if (symbol === globalThisSymbol) {
+        if (symbol === denoGlobalThisSymbol || symbol === nodeGlobalThisSymbol) {
             const varsOnly = new Map<__String, Symbol>();
             members.forEach(p => {
                 if (!(p.flags & SymbolFlags.BlockScoped) && !(p.flags & SymbolFlags.ValueModule && p.declarations?.length && every(p.declarations, isAmbientModule))) {
@@ -15346,7 +15428,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         if (isExternalModuleNameRelative(moduleName)) {
             return undefined;
         }
-        const symbol = getSymbol(globals, '"' + moduleName + '"' as __String, SymbolFlags.ValueModule);
+        const symbol = getSymbol(denoContext.combinedGlobals, '"' + moduleName + '"' as __String, SymbolFlags.ValueModule);
         // merged symbol is module declaration symbol combined with all augmentations
         return symbol && withAugmentations ? getMergedSymbol(symbol) : symbol;
     }
@@ -18638,7 +18720,11 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     }
                 }
 
-                if (objectType.symbol === globalThisSymbol && propName !== undefined && globalThisSymbol.exports!.has(propName) && (globalThisSymbol.exports!.get(propName)!.flags & SymbolFlags.BlockScoped)) {
+                if (objectType.symbol === denoGlobalThisSymbol && propName !== undefined && denoGlobalThisSymbol.exports!.has(propName) && (denoGlobalThisSymbol.exports!.get(propName)!.flags & SymbolFlags.BlockScoped)) {
+                    error(accessExpression, Diagnostics.Property_0_does_not_exist_on_type_1, unescapeLeadingUnderscores(propName), typeToString(objectType));
+                }
+                // deno: ensure condition and body match the above
+                else if (objectType.symbol === nodeGlobalThisSymbol && propName !== undefined && nodeGlobalThisSymbol.exports!.has(propName) && (nodeGlobalThisSymbol.exports!.get(propName)!.flags & SymbolFlags.BlockScoped)) {
                     error(accessExpression, Diagnostics.Property_0_does_not_exist_on_type_1, unescapeLeadingUnderscores(propName), typeToString(objectType));
                 }
                 else if (noImplicitAny && !(accessFlags & AccessFlags.SuppressNoImplicitAnyError)) {
@@ -29930,7 +30016,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 return; // Skip for invalid syntax like this: export { "x" }
             }
             const symbol = resolveName(exportedName, exportedName.escapedText, SymbolFlags.Value | SymbolFlags.Type | SymbolFlags.Namespace | SymbolFlags.Alias, /*nameNotFoundMessage*/ undefined, /*isUse*/ true);
-            if (symbol && (symbol === undefinedSymbol || symbol === globalThisSymbol || symbol.declarations && isGlobalSourceFile(getDeclarationContainer(symbol.declarations[0])))) {
+            if (symbol && (symbol === undefinedSymbol || symbol === denoGlobalThisSymbol || symbol === nodeGlobalThisSymbol || symbol.declarations && isGlobalSourceFile(getDeclarationContainer(symbol.declarations[0])))) {
                 // Do nothing, non-local symbol
             }
             else {
@@ -30651,8 +30737,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
         const type = tryGetThisTypeAt(node, /*includeGlobalThis*/ true, container);
         if (noImplicitThis) {
-            const globalThisType = getTypeOfSymbol(globalThisSymbol);
-            if (type === globalThisType && capturedByArrowFunction) {
+            const globalThisType = getTypeOfSymbol(denoGlobalThisSymbol);
+            if ((type === globalThisType || type === getTypeOfSymbol(nodeGlobalThisSymbol)) && capturedByArrowFunction) {
                 error(node, Diagnostics.The_containing_arrow_function_captures_the_global_value_of_this);
             }
             else if (!type) {
@@ -30714,7 +30800,10 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 return undefinedType;
             }
             else if (includeGlobalThis) {
-                return getTypeOfSymbol(globalThisSymbol);
+                if (denoContext.hasNodeSourceFile(container)) {
+                    return getTypeOfSymbol(nodeGlobalThisSymbol);
+                }
+                return getTypeOfSymbol(denoGlobalThisSymbol);
             }
         }
     }
@@ -34086,13 +34175,18 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 if (!isUncheckedJS && isJSLiteralType(leftType)) {
                     return anyType;
                 }
-                if (leftType.symbol === globalThisSymbol) {
-                    if (globalThisSymbol.exports!.has(right.escapedText) && (globalThisSymbol.exports!.get(right.escapedText)!.flags & SymbolFlags.BlockScoped)) {
+                if (leftType.symbol === denoGlobalThisSymbol) {
+                    if (denoGlobalThisSymbol.exports!.has(right.escapedText) && (denoGlobalThisSymbol.exports!.get(right.escapedText)!.flags & SymbolFlags.BlockScoped)) {
                         error(right, Diagnostics.Property_0_does_not_exist_on_type_1, unescapeLeadingUnderscores(right.escapedText), typeToString(leftType));
                     }
                     else if (noImplicitAny) {
                         error(right, Diagnostics.Element_implicitly_has_an_any_type_because_type_0_has_no_index_signature, typeToString(leftType));
                     }
+                    return anyType;
+                }
+                // deno: ensure condition matches above
+                if (leftType.symbol === nodeGlobalThisSymbol) {
+                    // deno: don't bother with errors like above for simplicity
                     return anyType;
                 }
                 if (right.escapedText && !checkAndReportErrorForExtendingInterface(node)) {
@@ -34427,7 +34521,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         // However, resolveNameHelper will continue and call this callback again, so we'll eventually get a correct suggestion.
         if (symbol) return symbol;
         let candidates: Symbol[];
-        if (symbols === globals) {
+        if (symbols === denoGlobals || symbols == nodeGlobals) {
             const primitives = mapDefined(
                 ["string", "number", "boolean", "object", "bigint", "symbol"],
                 s => symbols.has((s.charAt(0).toUpperCase() + s.slice(1)) as __String)
@@ -47767,7 +47861,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             }
             // find immediate value referenced by exported name (SymbolFlags.Alias is set so we don't chase down aliases)
             const symbol = resolveName(exportedName, exportedName.escapedText, SymbolFlags.Value | SymbolFlags.Type | SymbolFlags.Namespace | SymbolFlags.Alias, /*nameNotFoundMessage*/ undefined, /*isUse*/ true);
-            if (symbol && (symbol === undefinedSymbol || symbol === globalThisSymbol || symbol.declarations && isGlobalSourceFile(getDeclarationContainer(symbol.declarations[0])))) {
+            if (symbol && (symbol === undefinedSymbol || symbol === denoGlobalThisSymbol || symbol === nodeGlobalThisSymbol || symbol.declarations && isGlobalSourceFile(getDeclarationContainer(symbol.declarations[0])))) {
                 error(exportedName, Diagnostics.Cannot_export_0_Only_local_declarations_can_be_exported_from_a_module, idText(exportedName));
             }
             else {
@@ -48675,7 +48769,11 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 location = location.parent;
             }
 
-            copySymbols(globals, meaning);
+            if (denoContext.hasNodeSourceFile(location)) {
+                copySymbols(nodeGlobals, meaning);
+            }
+
+            copySymbols(denoGlobals, meaning);
         }
 
         /**
@@ -50061,7 +50159,10 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     }
 
     function hasGlobalName(name: string): boolean {
-        return globals.has(escapeLeadingUnderscores(name));
+        // deno: seems ok not to bother with nodeGlobals here since
+        // this is just a public api function that we don't bother with
+        // NOTICE: Make sure to check that's still the case when upgrading!!
+        return denoGlobals.has(escapeLeadingUnderscores(name));
     }
 
     function getReferencedValueSymbol(reference: Identifier, startInDeclarationContainer?: boolean): Symbol | undefined {
@@ -50379,10 +50480,10 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                         diagnostics.add(createDiagnosticForNode(declaration, Diagnostics.Declaration_name_conflicts_with_built_in_global_identifier_0, "globalThis"));
                     }
                 }
-                mergeSymbolTable(globals, file.locals!);
+                denoContext.mergeGlobalSymbolTable(file, file.locals!);
             }
             if (file.jsGlobalAugmentations) {
-                mergeSymbolTable(globals, file.jsGlobalAugmentations);
+                denoContext.mergeGlobalSymbolTable(file, file.jsGlobalAugmentations);
             }
             if (file.patternAmbientModules && file.patternAmbientModules.length) {
                 patternAmbientModules = concatenate(patternAmbientModules, file.patternAmbientModules);
@@ -50393,9 +50494,11 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             if (file.symbol && file.symbol.globalExports) {
                 // Merge in UMD exports with first-in-wins semantics (see #9771)
                 const source = file.symbol.globalExports;
+                const isNodeFile = denoContext.hasNodeSourceFile(file);
                 source.forEach((sourceSymbol, id) => {
-                    if (!globals.has(id)) {
-                        globals.set(id, sourceSymbol);
+                    const envGlobals = isNodeFile ? denoContext.getGlobalsForName(id) : denoGlobals;
+                    if (!envGlobals.has(id)) {
+                        envGlobals.set(id, sourceSymbol);
                     }
                 });
             }
@@ -50423,7 +50526,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         getSymbolLinks(undefinedSymbol).type = undefinedWideningType;
         getSymbolLinks(argumentsSymbol).type = getGlobalType("IArguments" as __String, /*arity*/ 0, /*reportErrors*/ true);
         getSymbolLinks(unknownSymbol).type = errorType;
-        getSymbolLinks(globalThisSymbol).type = createObjectType(ObjectFlags.Anonymous, globalThisSymbol);
+        getSymbolLinks(denoGlobalThisSymbol).type = createObjectType(ObjectFlags.Anonymous, denoGlobalThisSymbol);
+        getSymbolLinks(nodeGlobalThisSymbol).type = createObjectType(ObjectFlags.Anonymous, nodeGlobalThisSymbol);
 
         // Initialize special types
         globalArrayType = getGlobalType("Array" as __String, /*arity*/ 1, /*reportErrors*/ true);
@@ -52347,17 +52451,31 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         return false;
     }
 
-    function getAmbientModules(): Symbol[] {
-        if (!ambientModulesCache) {
-            ambientModulesCache = [];
-            globals.forEach((global, sym) => {
+    function getAmbientModules(sourceFile?: SourceFile): Symbol[] {
+        const isNode = denoContext.hasNodeSourceFile(sourceFile);
+        if (isNode) {
+            if (!nodeAmbientModulesCache) {
+                nodeAmbientModulesCache = getAmbientModules(denoContext.combinedGlobals);
+            }
+            return nodeAmbientModulesCache;
+        }
+        else {
+            if (!ambientModulesCache) {
+                ambientModulesCache = getAmbientModules(denoGlobals);
+            }
+            return ambientModulesCache;
+        }
+
+        function getAmbientModules(envGlobals: SymbolTable) {
+            const result: Symbol[] = [];
+            envGlobals.forEach((global, sym) => {
                 // No need to `unescapeLeadingUnderscores`, an escaped symbol is never an ambient module.
                 if (ambientModuleSymbolRegex.test(sym as string)) {
-                    ambientModulesCache!.push(global);
+                    result.push(global);
                 }
             });
+            return result;
         }
-        return ambientModulesCache;
     }
 
     function checkGrammarImportClause(node: ImportClause): boolean {
