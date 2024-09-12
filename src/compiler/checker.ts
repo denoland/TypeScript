@@ -1548,7 +1548,6 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         globals: denoGlobals,
         nodeGlobals,
         mergeSymbol,
-        ambientModuleSymbolRegex,
     });
 
     const nodeGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
@@ -8004,14 +8003,15 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     // An `import` type directed at an esm format file is only going to resolve in esm mode - set the esm mode assertion
                     if (targetFile?.impliedNodeFormat === ModuleKind.ESNext && targetFile.impliedNodeFormat !== contextFile?.impliedNodeFormat) {
                         specifier = getSpecifierForModuleSymbol(chain[0], context, ModuleKind.ESNext);
-                        attributes = factory.createImportAttributes(
-                            factory.createNodeArray([
-                                factory.createImportAttribute(
-                                    factory.createStringLiteral("resolution-mode"),
-                                    factory.createStringLiteral("import"),
-                                ),
-                            ]),
-                        );
+                        // deno: ignored because it's too noisy and unnecessary
+                        // attributes = factory.createImportAttributes(
+                        //     factory.createNodeArray([
+                        //         factory.createImportAttribute(
+                        //             factory.createStringLiteral("resolution-mode"),
+                        //             factory.createStringLiteral("import"),
+                        //         ),
+                        //     ]),
+                        // );
                     }
                 }
                 if (!specifier) {

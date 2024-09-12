@@ -3,19 +3,19 @@ import * as ts from "./_namespaces/ts";
 export type IsNodeSourceFileCallback = (sourceFile: ts.SourceFile) => boolean;
 
 let isNodeSourceFile: IsNodeSourceFileCallback = () => false;
-let nodeBuiltInModuleNames = new Set<string>();
 let nodeOnlyGlobalNames = new Set<ts.__String>();
+let nodeBannedGlobalNames = new Set<ts.__String>();
 
 export function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback) {
     isNodeSourceFile = callback;
 }
 
-export function setNodeBuiltInModuleNames(names: readonly string[]) {
-    nodeBuiltInModuleNames = new Set(names);
+/** List of globals that node is not allowed to set (ex. Request). */
+export function setNodeBannedGlobalNames(names: readonly string[]) {
+    nodeBannedGlobalNames = new Set(names) as Set<ts.__String>;
 }
 
 export function setNodeOnlyGlobalNames(names: readonly string[]) {
-    nodeBuiltInModuleNames = new Set(names);
     nodeOnlyGlobalNames = new Set(names) as Set<ts.__String>;
 }
 
@@ -35,12 +35,10 @@ export function createDenoForkContext({
     mergeSymbol,
     globals,
     nodeGlobals,
-    ambientModuleSymbolRegex,
 }: {
     mergeSymbol(target: ts.Symbol, source: ts.Symbol, unidirectional?: boolean): ts.Symbol;
     globals: ts.SymbolTable;
     nodeGlobals: ts.SymbolTable;
-    ambientModuleSymbolRegex: RegExp;
 }): DenoForkContext {
     return {
         hasNodeSourceFile,
@@ -56,18 +54,6 @@ export function createDenoForkContext({
     }
 
     function getGlobalsForName(id: ts.__String) {
-        // Node ambient modules are only accessible in the node code,
-        // so put them on the node globals
-        if (ambientModuleSymbolRegex.test(id as string)) {
-            if ((id as string).startsWith('"node:')) {
-                // check if it's a node specifier that we support
-                const name = (id as string).slice(6, -1);
-                if (nodeBuiltInModuleNames.has(name)) {
-                    return globals;
-                }
-            }
-            return nodeGlobals;
-        }
         return nodeOnlyGlobalNames.has(id) ? nodeGlobals : globals;
     }
 
@@ -87,6 +73,14 @@ export function createDenoForkContext({
                 if (prop === "get") {
                     return (key: ts.__String) => {
                         return nodeGlobals.get(key) ?? globals.get(key);
+                    };
+                }
+                else if (prop === "set") {
+                    return (key: ts.__String, value: ts.Symbol) => {
+                        if (nodeBannedGlobalNames.has(key) && globals.has(key)) {
+                            return nodeGlobals; // ignore if not in the current set of globals
+                        }
+                        return nodeGlobals.set(key, value);
                     };
                 }
                 else if (prop === "has") {
