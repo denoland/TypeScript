@@ -4,15 +4,9 @@ export type IsNodeSourceFileCallback = (sourceFile: ts.SourceFile) => boolean;
 
 let isNodeSourceFile: IsNodeSourceFileCallback = () => false;
 let nodeOnlyGlobalNames = new Set<ts.__String>();
-let nodeBannedGlobalNames = new Set<ts.__String>();
 
 export function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback) {
     isNodeSourceFile = callback;
-}
-
-/** List of globals that node is not allowed to set (ex. Request). */
-export function setNodeBannedGlobalNames(names: readonly string[]) {
-    nodeBannedGlobalNames = new Set(names) as Set<ts.__String>;
 }
 
 export function setNodeOnlyGlobalNames(names: readonly string[]) {
