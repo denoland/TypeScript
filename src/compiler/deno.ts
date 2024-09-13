@@ -75,14 +75,6 @@ export function createDenoForkContext({
                         return nodeGlobals.get(key) ?? globals.get(key);
                     };
                 }
-                else if (prop === "set") {
-                    return (key: ts.__String, value: ts.Symbol) => {
-                        if (nodeBannedGlobalNames.has(key) && globals.has(key)) {
-                            return nodeGlobals; // ignore if not in the current set of globals
-                        }
-                        return nodeGlobals.set(key, value);
-                    };
-                }
                 else if (prop === "has") {
                     return (key: ts.__String) => {
                         return nodeGlobals.has(key) || globals.has(key);

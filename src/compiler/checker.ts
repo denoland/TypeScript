@@ -1555,6 +1555,32 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     nodeGlobalThisSymbol.declarations = [];
     nodeGlobals.set(nodeGlobalThisSymbol.escapedName, nodeGlobalThisSymbol);
 
+    // deno: huge hacks to get @types/node to work
+    nodeGlobals.set(
+        "onmessage" as __String,
+        createSymbol(SymbolFlags.Module, "onmessage" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "onabort" as __String,
+        createSymbol(SymbolFlags.Module, "onabort" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "ReportingObserver" as __String,
+        createSymbol(SymbolFlags.Module, "ReportingObserver" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "PerformanceObserver" as __String,
+        createSymbol(SymbolFlags.Module, "PerformanceObserver" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "PerformanceObserverEntryList" as __String,
+        createSymbol(SymbolFlags.Module, "PerformanceObserverEntryList" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "PerformanceResourceTiming" as __String,
+        createSymbol(SymbolFlags.Module, "PerformanceResourceTiming" as __String, CheckFlags.Readonly),
+    );
+
     var argumentsSymbol = createSymbol(SymbolFlags.Property, "arguments" as __String);
     var requireSymbol = createSymbol(SymbolFlags.Property, "require" as __String);
     var isolatedModulesLikeFlagName = compilerOptions.verbatimModuleSyntax ? "verbatimModuleSyntax" : "isolatedModules";
@@ -3739,11 +3765,12 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 // In Node.js, CommonJS modules always have a synthetic default when imported into ESM
                 return true;
             }
-            if (usageMode === ModuleKind.ESNext && targetMode === ModuleKind.ESNext) {
-                // No matter what the `module` setting is, if we're confident that both files
-                // are ESM, there cannot be a synthetic default.
-                return false;
-            }
+            // deno: commented out for https://github.com/microsoft/TypeScript/issues/51321
+            // if (usageMode === ModuleKind.ESNext && targetMode === ModuleKind.ESNext) {
+            //     // No matter what the `module` setting is, if we're confident that both files
+            //     // are ESM, there cannot be a synthetic default.
+            //     return false;
+            // }
         }
         if (!allowSyntheticDefaultImports) {
             return false;
