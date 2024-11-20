@@ -5,11 +5,11 @@ export type IsNodeSourceFileCallback = (sourceFile: ts.SourceFile) => boolean;
 let isNodeSourceFile: IsNodeSourceFileCallback = () => false;
 let nodeOnlyGlobalNames = new Set<ts.__String>();
 
-export function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback) {
+export function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback): void {
     isNodeSourceFile = callback;
 }
 
-export function setNodeOnlyGlobalNames(names: readonly string[]) {
+export function setNodeOnlyGlobalNames(names: readonly string[]): void {
     nodeOnlyGlobalNames = new Set(names) as Set<ts.__String>;
 }
 
@@ -143,11 +143,11 @@ export function createDenoForkContext({
 
 export interface NpmPackageReference {
     name: string;
-    versionReq: string;
+    versionReq: string | undefined;
     subPath: string | undefined;
 }
 
-export function tryParseNpmPackageReference(text: string) {
+export function tryParseNpmPackageReference(text: string): NpmPackageReference | undefined {
     try {
         return parseNpmPackageReference(text);
     }
@@ -156,7 +156,7 @@ export function tryParseNpmPackageReference(text: string) {
     }
 }
 
-export function parseNpmPackageReference(text: string) {
+export function parseNpmPackageReference(text: string): NpmPackageReference {
     if (!text.startsWith("npm:")) {
         throw new Error(`Not an npm specifier: ${text}`);
     }

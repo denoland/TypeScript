@@ -11341,7 +11341,9 @@ export interface NameResolverOptions {
     compilerOptions: CompilerOptions;
     getSymbolOfDeclaration: (node: Declaration) => Symbol;
     error: (location: Node | undefined, message: DiagnosticMessage, ...args: DiagnosticArguments) => void;
-    globals: SymbolTable;
+    denoGlobals: SymbolTable;
+    nodeGlobals: SymbolTable;
+    denoContext: deno.DenoForkContext;
     argumentsSymbol: Symbol;
     requireSymbol: Symbol;
     lookup: (symbols: SymbolTable, name: __String, meaning: SymbolFlags) => Symbol | undefined;
