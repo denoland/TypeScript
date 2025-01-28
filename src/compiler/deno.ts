@@ -1,4 +1,4 @@
-import * as ts from "./_namespaces/ts";
+import * as ts from "./_namespaces/ts.js";
 
 export type IsNodeSourceFileCallback = (sourceFile: ts.SourceFile) => boolean;
 
