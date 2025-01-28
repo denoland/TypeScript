@@ -3,10 +3,7 @@
     "compilerOptions": {
     },
     "references": [
-        { "path": "../compiler" },
-        { "path": "../jsTyping" },
-        { "path": "../services" },
-        { "path": "../server" }
+        { "path": "../compiler" }
     ],
     "include": ["**/*"]
 }
