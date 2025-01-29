@@ -3,7 +3,8 @@
     "compilerOptions": {
     },
     "references": [
-        { "path": "../compiler" }
+        { "path": "../compiler" },
+        { "path": "../services" }
     ],
     "include": ["**/*"]
 }
