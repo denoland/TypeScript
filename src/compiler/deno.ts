@@ -59,15 +59,40 @@ export function createDenoForkContext({
     function mergeGlobalSymbolTable(node: ts.Node, source: ts.SymbolTable, unidirectional = false) {
         const sourceFile = ts.getSourceFileOfNode(node);
         const isNodeFile = hasNodeSourceFile(sourceFile);
-        const isTypesNodeSourceFile = isNodeFile && sourceFile.path.endsWith(".d.ts") && sourceFile.path.includes("/@types/node/");
+        const isTypesNodeSourceFile = isNodeFile && isTypesNodePkgPath(sourceFile.path);
         source.forEach((sourceSymbol, id) => {
             const target = isNodeFile ? getGlobalsForName(id) : globals;
             const targetSymbol = target.get(id);
-            if (isTypesNodeSourceFile && targetSymbol !== undefined && typesNodeIgnorableNames.has(id)) {
+            if (
+                isTypesNodeSourceFile
+                && targetSymbol !== undefined
+                && typesNodeIgnorableNames.has(id)
+                // if the symbol has a @types/node package then that means the global
+                // was created within the @types/node package and not the lib.d.ts files,
+                // so allow merging to it (useful when someone has DOM and deno types disabled)
+                && !symbolHasAnyTypesNodePkgDecl(targetSymbol)
+            ) {
                 return;
             }
             target.set(id, targetSymbol ? mergeSymbol(targetSymbol, sourceSymbol, unidirectional) : sourceSymbol);
         });
+    }
+
+    function symbolHasAnyTypesNodePkgDecl(symbol: ts.Symbol) {
+        if (symbol.declarations) {
+            for (const decl of symbol.declarations) {
+                const sourceFile = ts.getSourceFileOfNode(decl);
+                const isNodeFile = hasNodeSourceFile(sourceFile);
+                if (isNodeFile && isTypesNodePkgPath(sourceFile.path)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function isTypesNodePkgPath(path: ts.Path) {
+        return path.endsWith(".d.ts") && path.includes("/@types/node/");
     }
 
     function createNodeGlobalsSymbolTable() {
