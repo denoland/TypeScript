@@ -23,6 +23,7 @@ export interface DenoForkContext {
     getGlobalsForName: (id: ts.__String) => ts.SymbolTable;
     mergeGlobalSymbolTable: (node: ts.Node, source: ts.SymbolTable, unidirectional?: boolean) => void;
     combinedGlobals: ts.SymbolTable;
+    preProcessSourceFiles: (files: readonly ts.SourceFile[]) => void;
 }
 
 export function createDenoForkContext({
@@ -39,6 +40,7 @@ export function createDenoForkContext({
         getGlobalsForName,
         mergeGlobalSymbolTable,
         combinedGlobals: createNodeGlobalsSymbolTable(),
+        preProcessSourceFiles,
     };
 
     function hasNodeSourceFile(node: ts.Node | undefined) {
@@ -137,6 +139,109 @@ export function createDenoForkContext({
                     }
                 }
             }
+        }
+    }
+
+    function preProcessSourceFiles(files: readonly ts.SourceFile[]) {
+        for (const sourceFile of files) {
+            if (sourceFile.path.endsWith(".d.ts") && hasNodeSourceFile(sourceFile) && sourceFile.path.includes("/@types/node/")) {
+                processTypesNodeFile(sourceFile);
+            }
+        }
+    }
+
+    function processTypesNodeFile(sourceFile: ts.SourceFile) {
+        function makeNodeWhitespace(node: ts.Node) {
+            sourceFile.text = sourceFile.text.slice(0, node.pos)
+                + " ".repeat(node.pos + node.end)
+                + sourceFile.text.slice(node.end);
+        }
+
+        const globalNames = new Set([
+            "TextDecoder" as ts.__String,
+            "TextEncoder",
+        ]);
+        (globalThis as any).Deno.core.print("Looking at: " + sourceFile.path + "\n");
+        for (const stmt of sourceFile.statements) {
+            searchGlobalAugmentationInStmt(stmt);
+        }
+
+        function searchGlobalAugmentationInStmt(stmt: ts.Statement) {
+            if (!ts.isModuleDeclaration(stmt) || stmt.body === undefined || !ts.isModuleBlock(stmt.body)) {
+                return;
+            }
+
+            if (ts.isGlobalScopeAugmentation(stmt)) {
+                for (let i = stmt.body.statements.length - 1; i >= 0; i--) {
+                    const childStmt = stmt.body.statements[i];
+                    if (shouldRemoveStmt(childStmt)) {
+                        // makeNodeWhitespace(childStmt);
+                        // (stmt.body.statements as any as unknown[]).splice(i, 1);
+                        // (globalThis as any).Deno.core.print("DATA: " + JSON.stringify(sourceFile, undefined, 2) + "\n");
+                    }
+                }
+            }
+            else {
+                for (const child of stmt.body.statements) {
+                    searchGlobalAugmentationInStmt(child);
+                }
+            }
+        }
+
+        function shouldRemoveStmt(stmt: ts.Statement) {
+            if (!ts.isVariableStatement(stmt)) {
+                return false;
+            }
+            for (let i = stmt.declarationList.declarations.length - 1; i >= 0; i--) {
+                const varDecl = stmt.declarationList.declarations[i];
+                if (shouldRemoveVarDecl(varDecl)) {
+                    if (ts.isIdentifier(varDecl.name)) {
+                        if (stmt.declarationList.declarations.length === 1) {
+                            return true;
+                        }
+                        else {
+                            (stmt.declarationList.declarations as any as unknown[]).splice(i, 1);
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function shouldRemoveVarDecl(decl: ts.VariableDeclaration) {
+            if (ts.isIdentifier(decl.name) && decl.type) {
+                if (
+                    decl.name.escapedText === "PerformanceObserver"
+                    || decl.name.escapedText === "PerformanceObserverEntryList"
+                    || decl.name.escapedText === "PerformanceResourceTiming"
+                ) {
+                    return;
+                }
+                if (ts.isConditionalTypeNode(decl.type) && ts.isTypeQueryNode(decl.type.checkType)) {
+                    if (ts.isTypeLiteralNode(decl.type.extendsType)) {
+                        const typeLit = decl.type.extendsType;
+                        for (let i = typeLit.members.length - 1; i >= 0; i--) {
+                            const member = typeLit.members[i];
+                            if (member.name && ts.isIdentifier(member.name)) {
+                                if (member.name.escapedText === "onmessage" || member.name.escapedText === "onabort") {
+                                    (member.name as any).escapedText = "Deno";
+                                    (globalThis as any).Deno.core.print("REMOVED: " + decl.name.escapedText + "\n");
+                                }
+                                else if (member.name.escapedText === "ReportingObserver") {
+                                    (typeLit.members as any as any[]).splice(i, 1);
+                                }
+                            }
+                        }
+                    }
+                    // return ts.isIdentifier(checkType.exprName) && checkType.exprName.escapedText === "globalThis";
+                    // (globalThis as any).Deno.core.print("Looking at: " + decl.name.escapedText + "\n");
+                    // if (globalNames.has(decl.name.escapedText)) {
+                    //     (globalThis as any).Deno.core.print("REMOVED: " + decl.name.escapedText + "\n");
+                    //     return true;
+                    // }
+                }
+            }
+            return false;
         }
     }
 }
