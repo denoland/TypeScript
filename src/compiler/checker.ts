@@ -1551,7 +1551,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         mergeSymbol,
     });
 
-    const nodeGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
+    var nodeGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
     nodeGlobalThisSymbol.exports = denoContext.combinedGlobals;
     nodeGlobalThisSymbol.declarations = [];
     nodeGlobals.set(nodeGlobalThisSymbol.escapedName, nodeGlobalThisSymbol);
