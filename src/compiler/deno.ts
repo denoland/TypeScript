@@ -4,13 +4,18 @@ export type IsNodeSourceFileCallback = (sourceFile: ts.SourceFile) => boolean;
 
 let isNodeSourceFile: IsNodeSourceFileCallback = () => false;
 let nodeOnlyGlobalNames = new Set<ts.__String>();
+let typesNodeIgnorableNames = new Set<ts.__String>();
 
 export function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback): void {
     isNodeSourceFile = callback;
 }
 
-export function setNodeOnlyGlobalNames(names: readonly string[]): void {
-    nodeOnlyGlobalNames = new Set(names) as Set<ts.__String>;
+export function setNodeOnlyGlobalNames(names: Set<string>): void {
+    nodeOnlyGlobalNames = names as Set<ts.__String>;
+}
+
+export function setTypesNodeIgnorableNames(names: Set<string>): void {
+    typesNodeIgnorableNames = names as Set<ts.__String>;
 }
 
 // When upgrading:
@@ -54,9 +59,13 @@ export function createDenoForkContext({
     function mergeGlobalSymbolTable(node: ts.Node, source: ts.SymbolTable, unidirectional = false) {
         const sourceFile = ts.getSourceFileOfNode(node);
         const isNodeFile = hasNodeSourceFile(sourceFile);
+        const isTypesNodeSourceFile = isNodeFile && sourceFile.path.endsWith(".d.ts") && sourceFile.path.includes("/@types/node/");
         source.forEach((sourceSymbol, id) => {
             const target = isNodeFile ? getGlobalsForName(id) : globals;
             const targetSymbol = target.get(id);
+            if (isTypesNodeSourceFile && targetSymbol !== undefined && typesNodeIgnorableNames.has(id)) {
+                return;
+            }
             target.set(id, targetSymbol ? mergeSymbol(targetSymbol, sourceSymbol, unidirectional) : sourceSymbol);
         });
     }
