@@ -1545,18 +1545,42 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     denoGlobalThisSymbol.declarations = [];
     denoGlobals.set(denoGlobalThisSymbol.escapedName, denoGlobalThisSymbol);
 
-    var denoContext = deno.createDenoForkContext({
+    const denoContext = deno.createDenoForkContext({
         globals: denoGlobals,
         nodeGlobals,
         mergeSymbol,
     });
 
-    denoContext.preProcessSourceFiles(host.getSourceFiles());
-
-    var nodeGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
+    const nodeGlobalThisSymbol = createSymbol(SymbolFlags.Module, "globalThis" as __String, CheckFlags.Readonly);
     nodeGlobalThisSymbol.exports = denoContext.combinedGlobals;
     nodeGlobalThisSymbol.declarations = [];
     nodeGlobals.set(nodeGlobalThisSymbol.escapedName, nodeGlobalThisSymbol);
+
+    // deno: huge hacks to get @types/node to work
+    nodeGlobals.set(
+        "onmessage" as __String,
+        createSymbol(SymbolFlags.Module, "onmessage" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "onabort" as __String,
+        createSymbol(SymbolFlags.Module, "onabort" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "ReportingObserver" as __String,
+        createSymbol(SymbolFlags.Module, "ReportingObserver" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "PerformanceObserver" as __String,
+        createSymbol(SymbolFlags.Module, "PerformanceObserver" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "PerformanceObserverEntryList" as __String,
+        createSymbol(SymbolFlags.Module, "PerformanceObserverEntryList" as __String, CheckFlags.Readonly),
+    );
+    nodeGlobals.set(
+        "PerformanceResourceTiming" as __String,
+        createSymbol(SymbolFlags.Module, "PerformanceResourceTiming" as __String, CheckFlags.Readonly),
+    );
 
     var argumentsSymbol = createSymbol(SymbolFlags.Property, "arguments" as __String);
     var requireSymbol = createSymbol(SymbolFlags.Property, "require" as __String);
@@ -34518,7 +34542,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         // However, resolveNameHelper will continue and call this callback again, so we'll eventually get a correct suggestion.
         if (symbol) return symbol;
         let candidates: Symbol[];
-        if (symbols === denoGlobals || symbols === nodeGlobals) {
+        if (symbols === denoGlobals || symbols == nodeGlobals) {
             const primitives = mapDefined(
                 ["string", "number", "boolean", "object", "bigint", "symbol"],
                 s => symbols.has((s.charAt(0).toUpperCase() + s.slice(1)) as __String)
@@ -44352,7 +44376,6 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             ? Diagnostics.Subsequent_property_declarations_must_have_the_same_type_Property_0_must_be_of_type_1_but_here_has_type_2
             : Diagnostics.Subsequent_variable_declarations_must_have_the_same_type_Variable_0_must_be_of_type_1_but_here_has_type_2;
         const declName = declarationNameToString(nextDeclarationName);
-        (globalThis as any).Deno.core.print("Error for: " + declName + "\n");
         const err = error(
             nextDeclarationName,
             message,
