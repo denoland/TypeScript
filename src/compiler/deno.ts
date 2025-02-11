@@ -6,6 +6,38 @@ let isNodeSourceFile: IsNodeSourceFileCallback = () => false;
 let nodeOnlyGlobalNames = new Set<ts.__String>();
 let typesNodeIgnorableNames = new Set<ts.__String>();
 
+export type EnterSpan = (name: string) => object;
+export type ExitSpan = (span: object) => void;
+
+export let enterSpan: EnterSpan = () => ({ });
+export let exitSpan: ExitSpan = () => { };
+
+export function setEnterSpan(f: EnterSpan): void {
+    enterSpan = f;
+}
+export function setExitSpan(f: ExitSpan): void {
+    exitSpan = f;
+}
+
+export function spanned<T>(name: string, f: () => T): T {
+    const span = enterSpan(name);
+    let needsExit = true;
+    try {
+        const result = f();
+        if (result instanceof Promise) {
+            needsExit = false;
+            return result.finally(() => exitSpan(span)) as T;
+        } else {
+            return result;
+        }
+
+    } finally {
+        if (needsExit) {
+            exitSpan(span);
+        }
+    }
+}
+
 export function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback): void {
     isNodeSourceFile = callback;
 }
