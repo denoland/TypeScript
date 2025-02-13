@@ -577,15 +577,16 @@ export function changeCompilerHostLikeToUseCache(
         return sourceFile;
     } : undefined;
 
+    // deno: disable this cache because we always return false here
     // fileExists for any kind of extension
-    host.fileExists = fileName => {
-        const key = toPath(fileName);
-        const value = fileExistsCache.get(key);
-        if (value !== undefined) return value;
-        const newValue = originalFileExists.call(host, fileName);
-        fileExistsCache.set(key, !!newValue);
-        return newValue;
-    };
+    // host.fileExists = fileName => {
+    //     const key = toPath(fileName);
+    //     const value = fileExistsCache.get(key);
+    //     if (value !== undefined) return value;
+    //     const newValue = originalFileExists.call(host, fileName);
+    //     fileExistsCache.set(key, !!newValue);
+    //     return newValue;
+    // };
     if (originalWriteFile) {
         host.writeFile = (fileName, data, ...rest) => {
             const key = toPath(fileName);
