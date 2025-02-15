@@ -570,7 +570,6 @@ export function getExportInfoMap(importingFile: SourceFile | FutureSourceFile, h
             const seenExports = new Set<__String>();
             const checker = program.getTypeChecker();
             const defaultInfo = getDefaultLikeExportInfo(moduleSymbol, checker);
-
             // Note: I think we shouldn't actually see resolved module symbols here, but weird merges
             // can cause it to happen: see 'completionsImport_mergedReExport.ts'
             if (defaultInfo && isImportableSymbol(defaultInfo.symbol, checker)) {
