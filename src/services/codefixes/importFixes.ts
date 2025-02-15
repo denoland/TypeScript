@@ -1258,8 +1258,10 @@ function getNewImportFixes(
     const compilerOptions = program.getCompilerOptions();
     const moduleSpecifierResolutionHost = createModuleSpecifierResolutionHost(program, host);
     const getChecker = createGetChecker(program, host);
-    const moduleResolution = getEmitModuleResolutionKind(compilerOptions);
-    const rejectNodeModulesRelativePaths = moduleResolutionUsesNodeModules(moduleResolution);
+    // const moduleResolution = getEmitModuleResolutionKind(compilerOptions);
+    // deno: do not reject node_modules relative paths because
+    // they will be corrected later on by deno
+    const rejectNodeModulesRelativePaths = false; // moduleResolutionUsesNodeModules(moduleResolution);
     const getModuleSpecifiers = fromCacheOnly
         ? (exportInfo: SymbolExportInfo | FutureSymbolExportInfo) => moduleSpecifiers.tryGetModuleSpecifiersFromCache(exportInfo.moduleSymbol, sourceFile, moduleSpecifierResolutionHost, preferences)
         : (exportInfo: SymbolExportInfo | FutureSymbolExportInfo, checker: TypeChecker) => moduleSpecifiers.getModuleSpecifiersWithCacheInfo(exportInfo.moduleSymbol, checker, compilerOptions, sourceFile, moduleSpecifierResolutionHost, preferences, /*options*/ undefined, /*forAutoImport*/ true);
@@ -1638,7 +1640,7 @@ function getExportInfos(
             originalSymbolToExportInfos.add(getUniqueSymbolId(exportedSymbol, checker).toString(), { symbol: exportedSymbol, moduleSymbol, moduleFileName: toFile?.fileName, exportKind, targetFlags: skipAlias(exportedSymbol, checker).flags, isFromPackageJson });
         }
     }
-    forEachExternalModuleToImportFrom(program, host, preferences, useAutoImportProvider, (moduleSymbol, sourceFile, program, isFromPackageJson) => {
+    forEachExternalModuleToImportFrom(program, host, preferences, useAutoImportProvider, fromFile, (moduleSymbol, sourceFile, program, isFromPackageJson) => {
         const checker = program.getTypeChecker();
         cancellationToken.throwIfCancellationRequested();
 
