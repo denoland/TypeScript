@@ -127,7 +127,6 @@ export interface ExportInfoMap {
     onFileChanged(oldSourceFile: SourceFile, newSourceFile: SourceFile, typeAcquisitionEnabled: boolean): boolean;
 }
 
-/** @internal */
 export interface CacheableExportInfoMapHost {
     getCurrentProgram(): Program | undefined;
     getPackageJsonAutoImportProvider(): Program | undefined;
@@ -135,7 +134,6 @@ export interface CacheableExportInfoMapHost {
 }
 
 export type ExportMapInfoKey = string & { __exportInfoKey: void; };
-/** @internal */
 export function createCacheableExportInfoMap(host: CacheableExportInfoMapHost): ExportInfoMap {
     let exportInfoId = 1;
     const exportInfo = createMultiMap<ExportMapInfoKey, CachedSymbolExportInfo>();
