@@ -68,7 +68,6 @@ export const enum ImportKind {
     CommonJS,
 }
 
-/** @internal */
 export const enum ExportKind {
     Named,
     Default,
@@ -77,7 +76,6 @@ export const enum ExportKind {
     Module,
 }
 
-/** @internal */
 export interface SymbolExportInfo {
     readonly symbol: Symbol;
     readonly moduleSymbol: Symbol;
@@ -114,7 +112,6 @@ interface CachedSymbolExportInfo {
     isFromPackageJson: boolean;
 }
 
-/** @internal */
 export interface ExportInfoMap {
     isUsableByFile(importingFile: Path): boolean;
     clear(): void;
