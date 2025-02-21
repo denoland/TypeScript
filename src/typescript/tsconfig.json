@@ -4,9 +4,7 @@
     },
     "references": [
         { "path": "../compiler" },
-        { "path": "../jsTyping" },
-        { "path": "../services" },
-        { "path": "../server" }
+        { "path": "../services" }
     ],
     "include": ["**/*"]
 }
