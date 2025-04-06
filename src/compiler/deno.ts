@@ -6,12 +6,18 @@ let isNodeSourceFile: IsNodeSourceFileCallback = () => false;
 let nodeOnlyGlobalNames = new Set<ts.__String>();
 let typesNodeIgnorableNames = new Set<ts.__String>();
 
+export type IsClassicScript = (sourceFile: ts.SourceFile) => boolean;
 export type EnterSpan = (name: string) => object;
 export type ExitSpan = (span: object) => void;
 
+export let isClassicScript: IsClassicScript = () => false;
 export let enterSpan: EnterSpan = () => ({ });
 export let exitSpan: ExitSpan = () => { };
 
+
+export function setIsClassicScript(callback: IsClassicScript): void {
+    isClassicScript = callback;
+}
 export function setEnterSpan(f: EnterSpan): void {
     enterSpan = f;
 }

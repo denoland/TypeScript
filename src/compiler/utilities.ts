@@ -8882,6 +8882,10 @@ export function getSetExternalModuleIndicator(options: CompilerOptions): (file: 
         case ModuleDetectionKind.Force:
             // All non-declaration files are modules, declaration files still do the usual isFileProbablyExternalModule
             return (file: SourceFile) => {
+                if (deno.isClassicScript(file)) {
+                    file.externalModuleIndicator = undefined;
+                    return;
+                }
                 file.externalModuleIndicator = isFileProbablyExternalModule(file) || !file.isDeclarationFile || undefined;
             };
         case ModuleDetectionKind.Legacy:
