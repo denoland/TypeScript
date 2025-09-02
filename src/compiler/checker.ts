@@ -34592,7 +34592,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         // However, resolveNameHelper will continue and call this callback again, so we'll eventually get a correct suggestion.
         if (symbol) return symbol;
         let candidates: Symbol[];
-        if (symbols === denoGlobals || symbols == nodeGlobals) {
+        if (symbols === denoGlobals || symbols === nodeGlobals) {
             const primitives = mapDefined(
                 ["string", "number", "boolean", "object", "bigint", "symbol"],
                 s => symbols.has((s.charAt(0).toUpperCase() + s.slice(1)) as __String)
