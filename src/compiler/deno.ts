@@ -9,8 +9,8 @@ let typesNodeIgnorableNames = new Set<ts.__String>();
 export type EnterSpan = (name: string) => object;
 export type ExitSpan = (span: object) => void;
 
-export let enterSpan: EnterSpan = () => ({ });
-export let exitSpan: ExitSpan = () => { };
+export let enterSpan: EnterSpan = () => ({});
+export let exitSpan: ExitSpan = () => {};
 
 export function setEnterSpan(f: EnterSpan): void {
     enterSpan = f;
@@ -27,11 +27,12 @@ export function spanned<T>(name: string, f: () => T): T {
         if (result instanceof Promise) {
             needsExit = false;
             return result.finally(() => exitSpan(span)) as T;
-        } else {
+        }
+        else {
             return result;
         }
-
-    } finally {
+    }
+    finally {
         if (needsExit) {
             exitSpan(span);
         }
@@ -123,10 +124,6 @@ export function createDenoForkContext({
         return false;
     }
 
-    function isTypesNodePkgPath(path: ts.Path) {
-        return path.endsWith(".d.ts") && path.includes("/@types/node/");
-    }
-
     function createNodeGlobalsSymbolTable() {
         return new Proxy(globals, {
             get(target, prop: string | symbol, receiver) {
@@ -205,6 +202,10 @@ export function createDenoForkContext({
             }
         }
     }
+}
+
+export function isTypesNodePkgPath(path: ts.Path): boolean {
+    return path.endsWith(".d.ts") && path.includes("/@types/node/");
 }
 
 export interface NpmPackageReference {
