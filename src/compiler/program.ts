@@ -1822,10 +1822,9 @@ export function createProgram(_rootNamesOrOptions: readonly string[] | CreatePro
                 processRootFile(defaultLibraryFileName, /*isDefaultLib*/ true, /*ignoreNoDefaultLib*/ false, { kind: FileIncludeKind.LibFile });
             }
             else {
-                const nodeTypesLibUrl = "asset:///lib.node.d.ts" as Path;
                 forEach(options.lib, (libFileName, index) => {
                     // deno: we skip loading the lib.node.d.ts file if the @types/node package has been loaded
-                    if (libFileName === nodeTypesLibUrl) {
+                    if (libFileName === "lib.node.d.ts") {
                         // do not include if there is any @types/node package
                         for (const path of filesByName.keys()) {
                             if (deno.isTypesNodePkgPath(path)) {
