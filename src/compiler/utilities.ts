@@ -9354,6 +9354,11 @@ export function getJSXImplicitImportBase(compilerOptions: CompilerOptions, file?
     if (jsxRuntimePragma?.arguments.factory === "classic") {
         return undefined;
     }
+    // deno: use this function on compiler options to resolve the jsxImportSource based on the referrer
+    {
+        const resolvedJsxImportSource = file && (compilerOptions as any).resolveJsxImportSource?.(file.fileName);
+        if (resolvedJsxImportSource) return resolvedJsxImportSource;
+    }
     return compilerOptions.jsx === JsxEmit.ReactJSX ||
             compilerOptions.jsx === JsxEmit.ReactJSXDev ||
             compilerOptions.jsxImportSource ||
