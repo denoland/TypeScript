@@ -1710,6 +1710,8 @@ export function createProgram(_rootNamesOrOptions: readonly string[] | CreatePro
      * - undefined otherwise
      */
     const filesByName = new Map<Path, SourceFile | false | undefined>();
+    let shouldLoadNodeTypes = false;
+    let foundNodeTypes = false;
     let missingFileNames = new Map<Path, string>();
     // stores 'filename -> file association' ignoring case
     // used to track cases when two file names differ only in casing
@@ -1823,18 +1825,24 @@ export function createProgram(_rootNamesOrOptions: readonly string[] | CreatePro
             }
             else {
                 forEach(options.lib, (libFileName, index) => {
-                    // deno: we skip loading the lib.node.d.ts file if the @types/node package has been loaded
-                    if (libFileName === "lib.node.d.ts") {
-                        // do not include if there is any @types/node package
-                        for (const path of filesByName.keys()) {
-                            if (deno.isTypesNodePkgPath(path)) {
-                                return;
-                            }
-                        }
-                    }
                     processRootFile(pathForLibFile(libFileName), /*isDefaultLib*/ true, /*ignoreNoDefaultLib*/ false, { kind: FileIncludeKind.LibFile, index });
                 });
             }
+        }
+
+        // deno: now load the built-in node types if they were previously attempted
+        // to be loaded and there's no @types/node package
+        const hasTypesNodePackage = () => {
+            for (const path of filesByName.keys()) {
+                if (deno.isTypesNodePkgPath(path)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (foundNodeTypes && !hasTypesNodePackage()) {
+            shouldLoadNodeTypes = true;
+            processRootFile("asset:///lib.node.d.ts", /*isDefaultLib*/ true, /*ignoreNoDefaultLib*/ false, { kind: FileIncludeKind.LibFile, index: options.lib?.length ?? 0 });
         }
 
         files = toSorted(processingDefaultLibFiles, compareDefaultLibFiles).concat(processingOtherFiles);
@@ -3524,6 +3532,11 @@ export function createProgram(_rootNamesOrOptions: readonly string[] | CreatePro
 
     /** This has side effects through `findSourceFile`. */
     function processSourceFile(fileName: string, isDefaultLib: boolean, ignoreNoDefaultLib: boolean, packageId: PackageId | undefined, reason: FileIncludeReason): void {
+        // deno: we skip loading the lib.node.d.ts file if the @types/node package has been loaded
+        if (fileName === "asset:///lib.node.d.ts" && !shouldLoadNodeTypes) {
+            foundNodeTypes = true;
+            return;
+        }
         getSourceFileFromReferenceWorker(
             fileName,
             fileName => findSourceFile(fileName, isDefaultLib, ignoreNoDefaultLib, reason, packageId), // TODO: GH#18217
