@@ -51,6 +51,7 @@ import {
     createTypeReferenceDirectiveResolutionCache,
     CustomTransformers,
     Debug,
+    deno,
     DeclarationWithTypeParameterChildren,
     Diagnostic,
     DiagnosticArguments,
@@ -569,15 +570,16 @@ export function changeCompilerHostLikeToUseCache(
         return sourceFile;
     } : undefined;
 
+    // deno: disable this cache because we always return false here
     // fileExists for any kind of extension
-    host.fileExists = fileName => {
-        const key = toPath(fileName);
-        const value = fileExistsCache.get(key);
-        if (value !== undefined) return value;
-        const newValue = originalFileExists.call(host, fileName);
-        fileExistsCache.set(key, !!newValue);
-        return newValue;
-    };
+    // host.fileExists = fileName => {
+    //     const key = toPath(fileName);
+    //     const value = fileExistsCache.get(key);
+    //     if (value !== undefined) return value;
+    //     const newValue = originalFileExists.call(host, fileName);
+    //     fileExistsCache.set(key, !!newValue);
+    //     return newValue;
+    // };
     if (originalWriteFile) {
         host.writeFile = (fileName, data, ...rest) => {
             const key = toPath(fileName);
@@ -1708,6 +1710,8 @@ export function createProgram(_rootNamesOrOptions: readonly string[] | CreatePro
      */
     const filesByName = new Map<Path, SourceFile | false | undefined>();
     const libFiles = new Set<Path>();
+    let shouldLoadNodeTypes = false;
+    let foundNodeTypes = false;
     let missingFileNames = new Map<Path, string>();
     // stores 'filename -> file association' ignoring case
     // used to track cases when two file names differ only in casing
@@ -1823,6 +1827,23 @@ export function createProgram(_rootNamesOrOptions: readonly string[] | CreatePro
             }
         }
 
+        // deno: load built-in node types if no @types/node package was found
+        const hasTypesNodePackage = (): boolean => {
+            for (const path of filesByName.keys()) {
+                if (deno.isTypesNodePkgPath(path as Path)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (foundNodeTypes && !hasTypesNodePackage()) {
+            shouldLoadNodeTypes = true;
+            processRootFile(
+                "asset:///lib.node.d.ts",
+                /*isDefaultLib*/ true,
+                { kind: FileIncludeKind.LibFile, index: options.lib?.length ?? 0 },
+            );
+        }
         files = toSorted(processingDefaultLibFiles, compareDefaultLibFiles).concat(processingOtherFiles);
         processingDefaultLibFiles = undefined;
         processingOtherFiles = undefined;
@@ -3484,6 +3505,11 @@ export function createProgram(_rootNamesOrOptions: readonly string[] | CreatePro
 
     /** This has side effects through `findSourceFile`. */
     function processSourceFile(fileName: string, isDefaultLib: boolean, packageId: PackageId | undefined, reason: FileIncludeReason): void {
+        // deno: skip loading built-in node types when @types/node is present
+        if (fileName === "asset:///lib.node.d.ts" && !shouldLoadNodeTypes) {
+            foundNodeTypes = true;
+            return;
+        }
         getSourceFileFromReferenceWorker(
             fileName,
             fileName => findSourceFile(fileName, isDefaultLib, reason, packageId), // TODO: GH#18217
