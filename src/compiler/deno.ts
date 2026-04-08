@@ -5,6 +5,40 @@ export type IsNodeSourceFileCallback = (sourceFile: ts.SourceFile) => boolean;
 let isNodeSourceFile: IsNodeSourceFileCallback = () => false;
 let nodeBuiltInModuleNames = new Set<string>();
 let nodeOnlyGlobalNames = new Set<ts.__String>();
+let typesNodeIgnorableNames = new Set<ts.__String>();
+
+export type EnterSpan = (name: string) => object;
+export type ExitSpan = (span: object) => void;
+
+export let enterSpan: EnterSpan = () => ({});
+export let exitSpan: ExitSpan = () => {};
+
+export function setEnterSpan(f: EnterSpan): void {
+    enterSpan = f;
+}
+export function setExitSpan(f: ExitSpan): void {
+    exitSpan = f;
+}
+
+export function spanned<T>(name: string, f: () => T): T {
+    const span = enterSpan(name);
+    let needsExit = true;
+    try {
+        const result = f();
+        if (result instanceof Promise) {
+            needsExit = false;
+            return result.finally(() => exitSpan(span)) as T;
+        }
+        else {
+            return result;
+        }
+    }
+    finally {
+        if (needsExit) {
+            exitSpan(span);
+        }
+    }
+}
 
 export function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback): void {
     isNodeSourceFile = callback;
@@ -17,6 +51,10 @@ export function setNodeBuiltInModuleNames(names: readonly string[]): void {
 export function setNodeOnlyGlobalNames(names: readonly string[]): void {
     nodeBuiltInModuleNames = new Set(names);
     nodeOnlyGlobalNames = new Set(names) as Set<ts.__String>;
+}
+
+export function setTypesNodeIgnorableNames(names: Set<string>): void {
+    typesNodeIgnorableNames = names as Set<ts.__String>;
 }
 
 // When upgrading:
@@ -74,11 +112,40 @@ export function createDenoForkContext({
     function mergeGlobalSymbolTable(node: ts.Node, source: ts.SymbolTable, unidirectional = false) {
         const sourceFile = ts.getSourceFileOfNode(node);
         const isNodeFile = hasNodeSourceFile(sourceFile);
+        const isTypesNodeSourceFile = isNodeFile && isTypesNodePkgPath(sourceFile.path);
         source.forEach((sourceSymbol, id) => {
             const target = isNodeFile ? getGlobalsForName(id) : globals;
             const targetSymbol = target.get(id);
+            if (
+                isTypesNodeSourceFile
+                && targetSymbol !== undefined
+                && typesNodeIgnorableNames.has(id)
+                // if the symbol has a @types/node package then that means the global
+                // was created within the @types/node package and not the lib.d.ts files,
+                // so allow merging to it (useful when someone has DOM and deno types disabled)
+                && !symbolHasAnyTypesNodePkgDecl(targetSymbol)
+            ) {
+                return;
+            }
             target.set(id, targetSymbol ? mergeSymbol(targetSymbol, sourceSymbol, unidirectional) : sourceSymbol);
         });
+    }
+
+    function symbolHasAnyTypesNodePkgDecl(symbol: ts.Symbol) {
+        if (symbol.declarations) {
+            for (const decl of symbol.declarations) {
+                const sourceFile = ts.getSourceFileOfNode(decl);
+                const isNodeFile = hasNodeSourceFile(sourceFile);
+                if (isNodeFile && isTypesNodePkgPath(sourceFile.path)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function isTypesNodePkgPath(path: ts.Path) {
+        return path.endsWith(".d.ts") && path.includes("/@types/node/");
     }
 
     function createNodeGlobalsSymbolTable() {
@@ -159,6 +226,10 @@ export function createDenoForkContext({
             }
         }
     }
+}
+
+export function isTypesNodePkgPath(path: ts.Path): boolean {
+    return path.endsWith(".d.ts") && path.includes("/@types/node/");
 }
 
 export interface NpmPackageReference {
