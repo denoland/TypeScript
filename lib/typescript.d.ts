@@ -3642,6 +3642,40 @@ declare namespace ts {
             responseRequired?: boolean;
         }
     }
+    namespace deno {
+        function setEnterSpan(f: EnterSpan): void;
+        function setExitSpan(f: ExitSpan): void;
+        function spanned<T>(name: string, f: () => T): T;
+        function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback): void;
+        function setNodeBuiltInModuleNames(names: readonly string[]): void;
+        function setNodeOnlyGlobalNames(names: readonly string[]): void;
+        function setTypesNodeIgnorableNames(names: Set<string>): void;
+        function createDenoForkContext({ mergeSymbol, globals, nodeGlobals, ambientModuleSymbolRegex }: {
+            mergeSymbol(target: ts.Symbol, source: ts.Symbol, unidirectional?: boolean): ts.Symbol;
+            globals: ts.SymbolTable;
+            nodeGlobals: ts.SymbolTable;
+            ambientModuleSymbolRegex: RegExp;
+        }): DenoForkContext;
+        function isTypesNodePkgPath(path: ts.Path): boolean;
+        function tryParseNpmPackageReference(text: string): NpmPackageReference | undefined;
+        function parseNpmPackageReference(text: string): NpmPackageReference;
+        type IsNodeSourceFileCallback = (sourceFile: ts.SourceFile) => boolean;
+        type EnterSpan = (name: string) => object;
+        type ExitSpan = (span: object) => void;
+        let enterSpan: EnterSpan;
+        let exitSpan: ExitSpan;
+        interface DenoForkContext {
+            hasNodeSourceFile: (node: ts.Node | undefined) => boolean;
+            getGlobalsForName: (id: ts.__String) => ts.SymbolTable;
+            mergeGlobalSymbolTable: (node: ts.Node, source: ts.SymbolTable, unidirectional?: boolean) => void;
+            combinedGlobals: ts.SymbolTable;
+        }
+        interface NpmPackageReference {
+            name: string;
+            versionReq: string | undefined;
+            subPath: string | undefined;
+        }
+    }
     namespace JsTyping {
         interface TypingResolutionHost {
             directoryExists(path: string): boolean;
@@ -6282,7 +6316,7 @@ declare namespace ts {
         getExportsOfModule(moduleSymbol: Symbol): Symbol[];
         getJsxIntrinsicTagNamesAt(location: Node): Symbol[];
         isOptionalParameter(node: ParameterDeclaration): boolean;
-        getAmbientModules(): Symbol[];
+        getAmbientModules(sourceFile?: SourceFile): Symbol[];
         tryGetMemberInModuleExports(memberName: string, moduleSymbol: Symbol): Symbol | undefined;
         getApparentType(type: Type): Type;
         getBaseConstraintOfType(type: Type): Type | undefined;
