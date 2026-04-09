@@ -3642,6 +3642,40 @@ declare namespace ts {
             responseRequired?: boolean;
         }
     }
+    namespace deno {
+        function setEnterSpan(f: EnterSpan): void;
+        function setExitSpan(f: ExitSpan): void;
+        function spanned<T>(name: string, f: () => T): T;
+        function setIsNodeSourceFileCallback(callback: IsNodeSourceFileCallback): void;
+        function setNodeBuiltInModuleNames(names: readonly string[]): void;
+        function setNodeOnlyGlobalNames(names: readonly string[]): void;
+        function setTypesNodeIgnorableNames(names: Set<string>): void;
+        function createDenoForkContext({ mergeSymbol, globals, nodeGlobals, ambientModuleSymbolRegex }: {
+            mergeSymbol(target: ts.Symbol, source: ts.Symbol, unidirectional?: boolean): ts.Symbol;
+            globals: ts.SymbolTable;
+            nodeGlobals: ts.SymbolTable;
+            ambientModuleSymbolRegex: RegExp;
+        }): DenoForkContext;
+        function isTypesNodePkgPath(path: ts.Path): boolean;
+        function tryParseNpmPackageReference(text: string): NpmPackageReference | undefined;
+        function parseNpmPackageReference(text: string): NpmPackageReference;
+        type IsNodeSourceFileCallback = (sourceFile: ts.SourceFile) => boolean;
+        type EnterSpan = (name: string) => object;
+        type ExitSpan = (span: object) => void;
+        let enterSpan: EnterSpan;
+        let exitSpan: ExitSpan;
+        interface DenoForkContext {
+            hasNodeSourceFile: (node: ts.Node | undefined) => boolean;
+            getGlobalsForName: (id: ts.__String) => ts.SymbolTable;
+            mergeGlobalSymbolTable: (node: ts.Node, source: ts.SymbolTable, unidirectional?: boolean) => void;
+            combinedGlobals: ts.SymbolTable;
+        }
+        interface NpmPackageReference {
+            name: string;
+            versionReq: string | undefined;
+            subPath: string | undefined;
+        }
+    }
     namespace JsTyping {
         interface TypingResolutionHost {
             directoryExists(path: string): boolean;
@@ -6282,7 +6316,7 @@ declare namespace ts {
         getExportsOfModule(moduleSymbol: Symbol): Symbol[];
         getJsxIntrinsicTagNamesAt(location: Node): Symbol[];
         isOptionalParameter(node: ParameterDeclaration): boolean;
-        getAmbientModules(): Symbol[];
+        getAmbientModules(sourceFile?: SourceFile): Symbol[];
         tryGetMemberInModuleExports(memberName: string, moduleSymbol: Symbol): Symbol | undefined;
         getApparentType(type: Type): Type;
         getBaseConstraintOfType(type: Type): Type | undefined;
@@ -11306,6 +11340,34 @@ declare namespace ts {
         host: LanguageServiceHost;
         span: TextSpan;
         preferences: UserPreferences;
+    }
+    enum ExportKind {
+        Named = 0,
+        Default = 1,
+        ExportEquals = 2,
+        UMD = 3,
+        Module = 4,
+    }
+    interface SymbolExportInfo {
+        readonly symbol: Symbol;
+        readonly moduleSymbol: Symbol;
+        /** Set if `moduleSymbol` is an external module, not an ambient module */
+        moduleFileName: string | undefined;
+        exportKind: ExportKind;
+        targetFlags: SymbolFlags;
+        /** True if export was only found via the package.json AutoImportProvider (for telemetry). */
+        isFromPackageJson: boolean;
+    }
+    interface ExportInfoMap {
+        isUsableByFile(importingFile: Path): boolean;
+        clear(): void;
+        add(importingFile: Path, symbol: Symbol, key: __String, moduleSymbol: Symbol, moduleFile: SourceFile | undefined, exportKind: ExportKind, isFromPackageJson: boolean, checker: TypeChecker): void;
+        get(importingFile: Path, key: ExportMapInfoKey): readonly SymbolExportInfo[] | undefined;
+        search<T>(importingFile: Path, preferCapitalized: boolean, matches: (name: string, targetFlags: SymbolFlags) => boolean, action: (info: readonly SymbolExportInfo[], symbolName: string, isFromAmbientModule: boolean, key: ExportMapInfoKey) => T | undefined): T | undefined;
+        releaseSymbols(): void;
+        isEmpty(): boolean;
+        /** @returns Whether the change resulted in the cache being cleared */
+        onFileChanged(oldSourceFile: SourceFile, newSourceFile: SourceFile, typeAcquisitionEnabled: boolean): boolean;
     }
     type ExportMapInfoKey = string & {
         __exportInfoKey: void;
