@@ -9418,6 +9418,11 @@ export function getJSXImplicitImportBase(compilerOptions: CompilerOptions, file?
     if (jsxRuntimePragma?.arguments.factory === "classic") {
         return undefined;
     }
+    // deno: resolve jsx import source per-file for workspace members
+    {
+        const resolvedJsxImportSource = file && (compilerOptions as any).resolveJsxImportSource?.(file.fileName);
+        if (resolvedJsxImportSource) return resolvedJsxImportSource;
+    }
     return compilerOptions.jsx === JsxEmit.ReactJSX ||
             compilerOptions.jsx === JsxEmit.ReactJSXDev ||
             compilerOptions.jsxImportSource ||
